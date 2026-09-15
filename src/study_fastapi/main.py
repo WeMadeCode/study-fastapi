@@ -6,7 +6,6 @@ from study_fastapi.routers import users
 
 Base.metadata.create_all(bind=engine)
 
-
 app = FastAPI(title="Study Fastapi")
 app.include_router(users.router)
 

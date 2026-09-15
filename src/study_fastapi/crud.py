@@ -12,6 +12,11 @@ def create_user(db: Session, user_in: schemas.UserCreate):
     return user
 
 
+def get_user_by_email(db: Session, email: str):
+    result = select(models.User).where(models.User.email == email)
+    return db.scalar(result)
+
+
 def get_user(db: Session, user_id: int):
     return db.get(models.User, user_id)
 

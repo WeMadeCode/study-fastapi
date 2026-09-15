@@ -9,7 +9,17 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.post("", response_model=schemas.UserPublic, status_code=status.HTTP_201_CREATED)
 def create_user(user_in: schemas.UserCreate, db: Session = Depends(get_db)):  # noqa: B008
-    return crud.create_user(db, user_in)
+    if crud.get_user_by_email(db, user_in.email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+        )
+    try:
+        return crud.create_user(db, user_in)
+    except InterruptedError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+        )
 
 
 @router.get("", response_model=list[schemas.UserPublic])
