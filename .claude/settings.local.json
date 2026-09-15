@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(psql --version)",
+      "Bash(docker --version)",
+      "Bash(brew --version)"
+    ]
+  }
+}

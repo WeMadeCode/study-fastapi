@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI: uvicorn (debug)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["study_fastapi.main:app", "--port", "8000"],
+      "jinja": true,
+      "justMyCode": true
+    },
+    {
+      "name": "FastAPI: attach (配合 --reload)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "localhost", "port": 5678 },
+      "justMyCode": true
+    }
+  ]
+}
