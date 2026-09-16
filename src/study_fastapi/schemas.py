@@ -17,7 +17,7 @@ class PostPublic(BaseModel):
 
     id: int
     title: str
-    contet: str
+    content: str
     user_id: int
 
 
@@ -38,6 +38,7 @@ class UserPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     email: EmailStr
+    name: str
     is_active: bool
     created_at: datetime
     posts: list[PostPublic] = []  # 用户名下所有的帖子

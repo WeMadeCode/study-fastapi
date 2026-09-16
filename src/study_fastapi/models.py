@@ -18,7 +18,7 @@ class User(Base):
     posts: Mapped[list["Post"]] = relationship(back_populates="author")
 
     def __repr__(self):
-        return f"User(id={self.id}, email={self.email},name={self.name})"
+        return f"User(id={self.id},email={self.email},name={self.name},is_active={self.is_active},created_at={self.created_at})"
 
 
 class Post(Base):
@@ -32,4 +32,4 @@ class Post(Base):
     author: Mapped["User"] = relationship(back_populates="posts")
 
     def __repr__(self):
-        return f"Post(id={self.id}, title={self.title}, user_id={self.user_id})"
+        return f"Post(id={self.id},title={self.title},user_id={self.user_id},content={self.content})"

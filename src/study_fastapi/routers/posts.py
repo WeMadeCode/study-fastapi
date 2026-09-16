@@ -9,7 +9,7 @@ router = APIRouter(tags=["posts"])
 
 
 @router.post(
-    "/user/{user_id}/posts",
+    "/users/{user_id}/posts",
     response_model=schemas.PostPublic,
     status_code=status.HTTP_201_CREATED,
 )
@@ -26,7 +26,7 @@ def create_post_for_user(
     return crud.create_post(db, user, post_in)
 
 
-@router.get("/user/{user_id}/posts", response_model=list[schemas.PostPublic])
+@router.get("/users/{user_id}/posts", response_model=list[schemas.PostPublic])
 def list_posts_for_user(user_id: int, db: Session = Depends(get_db)):  # noqa: B008
     user = crud.get_user(db, user_id)
     if user is None:
