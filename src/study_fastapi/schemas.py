@@ -19,6 +19,7 @@ class PostPublic(BaseModel):
     title: str
     content: str
     user_id: int
+    views: int
 
 
 class UserCreate(BaseModel):

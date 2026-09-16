@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, func
+from sqlalchemy import ForeignKey, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from study_fastapi.database import Base
@@ -14,7 +14,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(50))
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-
+    bio: Mapped[str | None] = mapped_column(String(500))
     posts: Mapped[list["Post"]] = relationship(
         back_populates="author", cascade="all, delete-orphan"
     )
@@ -30,7 +30,7 @@ class Post(Base):
     title: Mapped[str] = mapped_column(String(200))
     content: Mapped[str]
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-
+    views: Mapped[int] = mapped_column(server_default=text("0"))
     author: Mapped["User"] = relationship(back_populates="posts")
 
     def __repr__(self):

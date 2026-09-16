@@ -1,7 +1,5 @@
-from collections.abc import Generator
-
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 DATABASE_URL = "postgresql+psycopg://postgres:study123@localhost:5432/study_fastapi"
 
