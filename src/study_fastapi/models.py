@@ -32,6 +32,7 @@ class Post(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     views: Mapped[int] = mapped_column(server_default=text("0"))
     author: Mapped["User"] = relationship(back_populates="posts")
+    published: Mapped[bool] = mapped_column(server_default=text("true"))
 
     def __repr__(self):
         return f"Post(id={self.id},title={self.title},user_id={self.user_id},content={self.content})"
