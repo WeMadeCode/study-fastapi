@@ -4,7 +4,8 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 from study_fastapi import models  # type: ignore # noqa: F401
-from study_fastapi.database import DATABASE_URL, Base
+from study_fastapi.config import settings
+from study_fastapi.database import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -20,7 +21,7 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.database_url)
 target_metadata = Base.metadata
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
