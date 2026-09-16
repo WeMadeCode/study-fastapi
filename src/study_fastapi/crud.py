@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from study_fastapi import models, schemas
 
@@ -22,7 +22,14 @@ def get_user(db: Session, user_id: int):
 
 
 def get_users(db: Session, skip: int = 0, limit: int = 100):
-    result = db.scalars(select(models.User).offset(skip).limit(limit)).all()
+    sel = (
+        select(models.User)
+        .options(selectinload(models.User.posts))
+        .offset(skip)
+        .limit(limit)
+    )
+
+    result = db.scalars(sel)
     return list(result)
 
 

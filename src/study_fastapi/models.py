@@ -15,7 +15,9 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    posts: Mapped[list["Post"]] = relationship(back_populates="author")
+    posts: Mapped[list["Post"]] = relationship(
+        back_populates="author", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"User(id={self.id},email={self.email},name={self.name},is_active={self.is_active},created_at={self.created_at})"
