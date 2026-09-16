@@ -37,3 +37,17 @@ def update_user(db: Session, user: models.User, user_in: schemas.UserUpdate):
 def delete_user(db: Session, user: models.User):
     db.delete(user)
     db.commit()
+
+
+def create_post(db: Session, user: models.User, post_in: schemas.PostCreate):
+    post = models.Post(**post_in.model_dump(), author=user)
+
+    db.add(post)
+    db.commit()
+    db.refresh(post)
+    return post
+
+
+def get_user_posts(db: Session, user: models.User):
+    result = select(models.Post).where(models.Post.user_id == user.id)
+    return list(db.scalars(result))

@@ -29,7 +29,7 @@ class Post(Base):
     content: Mapped[str]
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
-    auther: Mapped["User"] = relationship(back_populates="posts")
+    author: Mapped["User"] = relationship(back_populates="posts")
 
     def __repr__(self):
         return f"Post(id={self.id}, title={self.title}, user_id={self.user_id})"
