@@ -1,60 +1,70 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from study_fastapi import models, schemas
 
 
-def create_user(db: Session, user_in: schemas.UserCreate):
+async def create_user(db: AsyncSession, user_in: schemas.UserCreate):
     user = models.User(**user_in.model_dump())
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    # refresh 时顺便把 posts 关系也加载了(新用户必然是空列表,但不加载 = 序列化爆炸)
+    await db.refresh(user, attribute_names=["posts"])
     return user
 
 
-def get_user_by_email(db: Session, email: str):
+async def get_user_by_email(db: AsyncSession, email: str):
     result = select(models.User).where(models.User.email == email)
-    return db.scalar(result)
+    return await db.scalar(result)
 
 
-def get_user(db: Session, user_id: int):
-    return db.get(models.User, user_id)
+async def get_user(db: AsyncSession, user_id: int):
+    return await db.get(models.User, user_id)
 
 
-def get_users(db: Session, skip: int = 0, limit: int = 100):
+async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100):
     sel = (
         select(models.User)
         .options(selectinload(models.User.posts))
         .offset(skip)
         .limit(limit)
     )
-
-    result = db.scalars(sel)
+    result = await db.scalars(sel)
     return list(result)
 
 
-def update_user(db: Session, user: models.User, user_in: schemas.UserUpdate):
+async def update_user(db: AsyncSession, user: models.User, user_in: schemas.UserUpdate):
     for key, value in user_in.model_dump(exclude_unset=True).items():
         setattr(user, key, value)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
-def delete_user(db: Session, user: models.User):
-    db.delete(user)
-    db.commit()
+async def delete_user(db: AsyncSession, user: models.User):
+    await db.delete(user)
+    await db.commit()
 
 
-def create_post(db: Session, user: models.User, post_in: schemas.PostCreate):
+async def create_post(db: AsyncSession, user: models.User, post_in: schemas.PostCreate):
     post = models.Post(**post_in.model_dump(), author=user)
 
     db.add(post)
-    db.commit()
-    db.refresh(post)
+    await db.commit()
+    await db.refresh(post)
     return post
 
 
-def get_user_posts(db: Session, user: models.User):
+async def get_user_posts(db: AsyncSession, user: models.User):
     result = select(models.Post).where(models.Post.user_id == user.id)
-    return list(db.scalars(result))
+    return list(await db.scalars(result))
+
+
+async def get_user_with_posts(db: AsyncSession, user_id: int):
+    """用户 + 帖子一起取(异步世界必须显式加载关联)。"""
+    return await db.scalar(
+        select(models.User)
+        .options(selectinload(models.User.posts))
+        .where(models.User.id == user_id)
+    )
