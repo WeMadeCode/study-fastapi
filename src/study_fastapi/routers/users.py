@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from study_fastapi.crud import users
 from study_fastapi.database.pgsql_client import get_async_db
-from study_fastapi.schemas.user import UserCreate, UserPublic, UserUpdate
+from study_fastapi.schemas.users import UserCreate, UserPublic, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 

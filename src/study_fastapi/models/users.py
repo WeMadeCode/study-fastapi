@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from study_fastapi.database.pgsql_client import Base
 
 if TYPE_CHECKING:
-    from .post import Post
+    from .posts import Post
 
 
 class User(Base):

@@ -2,12 +2,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from study_fastapi.models import user
-from study_fastapi.schemas.user import UserCreate, UserUpdate
+from study_fastapi.models import users
+from study_fastapi.schemas.users import UserCreate, UserUpdate
 
 
 async def create_user(db: AsyncSession, user_in: UserCreate):
-    model = user.User(**user_in.model_dump())
+    model = users.User(**user_in.model_dump())
     db.add(model)
     await db.commit()
     await db.refresh(model, attribute_names=["posts"])
@@ -15,18 +15,18 @@ async def create_user(db: AsyncSession, user_in: UserCreate):
 
 
 async def get_user_by_email(db: AsyncSession, email: str):
-    result = select(user.User).where(user.User.email == email)
+    result = select(users.User).where(users.User.email == email)
     return await db.scalar(result)
 
 
 async def get_user(db: AsyncSession, user_id: int):
-    return await db.get(user.User, user_id)
+    return await db.get(users.User, user_id)
 
 
 async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100):
     sel = (
-        select(user.User)
-        .options(selectinload(user.User.posts))
+        select(users.User)
+        .options(selectinload(users.User.posts))
         .offset(skip)
         .limit(limit)
     )
@@ -34,7 +34,7 @@ async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100):
     return list(result)
 
 
-async def update_user(db: AsyncSession, user: user.User, user_in: UserUpdate):
+async def update_user(db: AsyncSession, user: users.User, user_in: UserUpdate):
     for key, value in user_in.model_dump(exclude_unset=True).items():
         setattr(user, key, value)
     await db.commit()
@@ -42,7 +42,7 @@ async def update_user(db: AsyncSession, user: user.User, user_in: UserUpdate):
     return user
 
 
-async def delete_user(db: AsyncSession, user: user.User):
+async def delete_user(db: AsyncSession, user: users.User):
     await db.delete(user)
     await db.commit()
 
@@ -50,7 +50,7 @@ async def delete_user(db: AsyncSession, user: user.User):
 async def get_user_with_posts(db: AsyncSession, user_id: int):
     """用户 + 帖子一起取(异步世界必须显式加载关联)。"""
     return await db.scalar(
-        select(user.User)
-        .options(selectinload(user.User.posts))
-        .where(user.User.id == user_id)
+        select(users.User)
+        .options(selectinload(users.User.posts))
+        .where(users.User.id == user_id)
     )

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from study_fastapi.database.pgsql_client import Base
 from study_fastapi.models.news import News
-from study_fastapi.models.user import User
+from study_fastapi.models.users import User
 
 
 class History(Base):

@@ -4,7 +4,7 @@ from .category import Category
 from .favorite import Favorite
 from .history import History
 from .news import News
-from .post import Post
-from .user import User
+from .posts import Post
+from .users import User
 
 __all__ = ["Category", "Favorite", "History", "News", "Post", "User"]
