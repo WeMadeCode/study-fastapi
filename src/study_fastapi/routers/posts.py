@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from study_fastapi import crud, schemas
+from study_fastapi.crud import posts, users
 from study_fastapi.database.pgsql_client import get_async_db
+from study_fastapi.schemas.post import PostCreate, PostPublic
 
 #  帖子围绕用户展开，所以创建、列表挂嵌套路径，全局列表用根路径
 router = APIRouter(tags=["posts"])
@@ -10,27 +11,27 @@ router = APIRouter(tags=["posts"])
 
 @router.post(
     "/users/{user_id}/posts",
-    response_model=schemas.PostPublic,
+    response_model=PostPublic,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_post_for_user(
     user_id: int,
-    post_in: schemas.PostCreate,
+    post_in: PostCreate,
     db: AsyncSession = Depends(get_async_db),  # noqa: B008
 ):
-    user = await crud.get_user(db, user_id)
+    user = await users.get_user(db, user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return await crud.create_post(db, user, post_in)
+    return await posts.create_post(db, user, post_in)
 
 
-@router.get("/users/{user_id}/posts", response_model=list[schemas.PostPublic])
+@router.get("/users/{user_id}/posts", response_model=list[PostPublic])
 async def list_posts_for_user(user_id: int, db: AsyncSession = Depends(get_async_db)):  # noqa: B008
-    user = await crud.get_user(db, user_id)
+    user = await users.get_user(db, user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return await crud.get_user_posts(db, user)
+    return await posts.get_user_posts(db, user)

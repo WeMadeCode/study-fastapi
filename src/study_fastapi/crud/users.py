@@ -2,11 +2,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from study_fastapi import schemas
-from study_fastapi.models import post, user
+from study_fastapi.models import user
+from study_fastapi.schemas.user import UserCreate, UserUpdate
 
 
-async def create_user(db: AsyncSession, user_in: schemas.UserCreate):
+async def create_user(db: AsyncSession, user_in: UserCreate):
     model = user.User(**user_in.model_dump())
     db.add(model)
     await db.commit()
@@ -34,7 +34,7 @@ async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100):
     return list(result)
 
 
-async def update_user(db: AsyncSession, user: user.User, user_in: schemas.UserUpdate):
+async def update_user(db: AsyncSession, user: user.User, user_in: UserUpdate):
     for key, value in user_in.model_dump(exclude_unset=True).items():
         setattr(user, key, value)
     await db.commit()
@@ -45,20 +45,6 @@ async def update_user(db: AsyncSession, user: user.User, user_in: schemas.UserUp
 async def delete_user(db: AsyncSession, user: user.User):
     await db.delete(user)
     await db.commit()
-
-
-async def create_post(db: AsyncSession, user: user.User, post_in: schemas.PostCreate):
-    model = post.Post(**post_in.model_dump(), author=user)
-
-    db.add(model)
-    await db.commit()
-    await db.refresh(model)
-    return model
-
-
-async def get_user_posts(db: AsyncSession, user: user.User):
-    result = select(post.Post).where(post.Post.user_id == user.id)
-    return list(await db.scalars(result))
 
 
 async def get_user_with_posts(db: AsyncSession, user_id: int):
