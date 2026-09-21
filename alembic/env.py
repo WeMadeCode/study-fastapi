@@ -4,8 +4,8 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 from study_fastapi import models  # type: ignore # noqa: F401
-from study_fastapi.config import settings
-from study_fastapi.database import Base
+from study_fastapi.config.config import settings
+from study_fastapi.database.pgsql_client import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

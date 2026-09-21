@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import ForeignKey, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from study_fastapi.database import Base
+from study_fastapi.database.pgsql_client import Base
 
 
 class User(Base):

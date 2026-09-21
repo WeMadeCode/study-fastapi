@@ -1,10 +1,7 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
 
-from study_fastapi.config import settings
-
-from collections.abc import AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from study_fastapi.config.config import settings
 
 async_engine = create_async_engine(settings.database_url, echo=settings.debug)
 

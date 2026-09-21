@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from study_fastapi import crud, schemas
-from study_fastapi.database import get_async_db
+from study_fastapi.database.pgsql_client import get_async_db
 
 #  帖子围绕用户展开，所以创建、列表挂嵌套路径，全局列表用根路径
 router = APIRouter(tags=["posts"])
