@@ -23,3 +23,9 @@ async def list_news(
 async def list_categories(db: AsyncSession):
     stmt = select(news.Category).order_by(news.Category.sort_order)
     return list(await db.scalars(stmt))
+
+
+async def get_news_detail(db: AsyncSession, news_id: int):
+    stmt = select(news.News).where(news.News.id == news_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()

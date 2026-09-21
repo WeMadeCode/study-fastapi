@@ -10,6 +10,10 @@ def build_list_key(category_id: int | None, page: int, page_size: int):
     return f"news:list:{category_id or 0}:{page}:{page_size}"
 
 
+def build_detail_key(news_id: int):
+    return f"news:detail:{news_id}"
+
+
 def build_categories_key():
     return "news:categories"
 
