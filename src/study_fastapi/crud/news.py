@@ -19,3 +19,7 @@ async def list_news(
     total = await db.scalar(count_stmt)
     return items, total
 
+
+async def list_categories(db: AsyncSession):
+    stmt = select(news.Category).order_by(news.Category.sort_order)
+    return list(await db.scalars(stmt))
