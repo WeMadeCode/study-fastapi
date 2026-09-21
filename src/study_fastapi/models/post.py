@@ -1,8 +1,12 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import ForeignKey, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from study_fastapi.database.pgsql_client import Base
 
+if TYPE_CHECKING:
+    from .user import User
 
 class Post(Base):
     __tablename__ = "posts"
@@ -12,7 +16,7 @@ class Post(Base):
     content: Mapped[str]
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     views: Mapped[int] = mapped_column(server_default=text("0"))
-    author: Mapped["User"] = relationship(back_populates="posts")  # noqa: F821
+    author: Mapped["User"] = relationship(back_populates="posts")
     published: Mapped[bool] = mapped_column(server_default=text("true"))
 
     def __repr__(self):
