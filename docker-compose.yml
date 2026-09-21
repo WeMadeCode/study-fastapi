@@ -3,7 +3,7 @@ services:
     image: postgres:18
     container_name: study-pgsql
     environment:
-      POSTGRES_USER: study
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: study123
       POSTGRES_DB: study_fastapi
     ports:
@@ -34,7 +34,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root123
       MYSQL_DATABASE: study_fastapi
-      MYSQL_USER: study
+      MYSQL_USER: mysql
       MYSQL_PASSWORD: study123
     ports:
       - "3306:3306"

@@ -19,7 +19,9 @@ class User(Base):
         String(255), nullable=False, comment="密码（加密存储）"
     )
     gender: Mapped[str | None] = mapped_column(
-        Enum("male", "female", "unknown"), comment="性别", default="unknown"
+        Enum("male", "female", "unknown", name="gender"),
+        comment="性别",
+        default="unknown",
     )
 
     is_active: Mapped[bool] = mapped_column(default=True)
