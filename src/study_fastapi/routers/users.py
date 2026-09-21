@@ -59,7 +59,7 @@ async def update_user(
     return await users.update_user(db, item, user_in)
 
 
-@router.delete("/user_id", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(user_id: int, db: AsyncSession = Depends(get_async_db)):  # noqa: B008
     item = await users.get_user_with_posts(db, user_id)
     if item is None:

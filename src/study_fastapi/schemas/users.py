@@ -24,5 +24,5 @@ class UserPublic(BaseModel):
     email: EmailStr
     name: str
     is_active: bool
-    created_at: datetime
+    create_at: datetime
     posts: list[PostPublic] = []  # 用户名下所有的帖子

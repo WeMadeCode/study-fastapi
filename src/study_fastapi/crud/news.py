@@ -1,0 +1,21 @@
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from study_fastapi.models import news
+
+
+async def list_news(
+    db: AsyncSession, category_id: int | None, page: int, page_size: int
+):
+    stmt = select(news.News).order_by(news.News.publish_time.desc())
+    count_stmt = select(func.count()).select_from(news.News)
+    if category_id is not None:
+        stmt = stmt.where(news.News.category_id == category_id)
+        count_stmt = count_stmt.where(news.News.category_id == category_id)
+
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+
+    items = list(await db.scalars(stmt))
+    total = await db.scalar(count_stmt)
+    return items, total
+

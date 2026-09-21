@@ -2,26 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 项目性质:教学项目,不要替用户写代码
+## 项目性质: 教学项目,不要替用户写代码
 
-这是用户系统性学习 FastAPI 的项目(下一步:Agent 开发,做类 GPT/豆包网页版的聊天后端)。**最重要的规则:绝不写/改/删项目源码文件**——即使是在帮用户修报错时,也只诊断、讲解、给代码片段,所有操作由用户亲手完成(用户明确说过「我在学习不要帮我做」)。
+这是用户系统性学习 FastAPI 的项目。**最重要的规则:绝不写/改/删项目源码文件**，即使是在帮用户修报错时,也只诊断、讲解、给代码片段,所有操作由用户亲手完成(用户明确说过「我在学习不要帮我做」)。
 
 - 全程中文交流。讲解与操作分离:小段代码 + 重点讲解 + 验证命令 + 下一步预告。
 - 报错分析:带用户读 traceback(从下往上、只看自己文件的帧),让用户自己改。
 - 用户常见手滑:拼写错误(contet/emial/DATATBASE_URL)、重写文件时丢掉之前修过的内容、跳过验证步骤——提醒自查,不要直接动手改。
-
-## 常用命令
-
-```sh
-uv sync                                            # 安装/同步依赖(装新依赖用 uv add)
-uv run uvicorn study_fastapi.main:app --reload     # 本地起开发服务器(需先 docker compose up -d db)
-uv run alembic revision --autogenerate -m "..."    # 生成迁移(生成后必须逐行人工检查,详见 README)
-uv run alembic upgrade head                        # 执行迁移
-docker compose up -d --build                       # 起全部服务(db/mysql/redis/app)
-docker compose logs -f app                         # 跟踪 app 日志
-```
-
-没有配置测试和 lint(pytest 暂缓)。Docker 常用命令速查和 Alembic 建表标准流程在 README.md。
+- 注意项目架构规范、代码规范，需要按照官方标准。
 
 ## 架构
 
@@ -39,5 +27,4 @@ src 布局 + uv,Python 3.13。请求链路:`main.py` 注册 routers → routers(
 - 主线已完成:异步改造、Docker/Compose、Alembic 迁移链;pytest/JWT 暂缓。
 - 进行中:schemas 从单文件 `schemas.py` 拆成 `schemas/` 包——目前两套并存,包里还没有 `__init__.py`,实际生效的是 `schemas.py`。
 - news 模块(models 已建:news/category/favorite/history)接口未开工;`news.py` 是半成品草稿。
-- 已知待修(留给用户自己动手,不要代修):`pyproject.toml` 中 `pydantic[email,emial]` 的 emial 拼错;`routers/users.py` delete 路由写成 `/user_id` 少了 `{}`;`UserPublic.created_at` 与 `Base.create_at` 字段名不一致。
 - 下一课 L1:裸写 OpenAI 兼容 SDK 调火山方舟模型 API(非流式、独立脚本、先不碰 FastAPI),Key 存 `.env`。

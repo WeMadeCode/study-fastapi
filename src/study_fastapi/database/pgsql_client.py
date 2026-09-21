@@ -21,6 +21,12 @@ class Base(DeclarativeBase):
 
 
 async def get_async_db():
-    """异步版依赖:async with 代替手写 try/finally。"""
-    async with AsyncSessionLocal() as db:
-        yield db
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
