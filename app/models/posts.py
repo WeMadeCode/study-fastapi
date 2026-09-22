@@ -8,6 +8,7 @@ from app.database.pgsql_client import Base
 if TYPE_CHECKING:
     from .users import User
 
+
 class Post(Base):
     __tablename__ = "posts"
 
@@ -20,4 +21,6 @@ class Post(Base):
     published: Mapped[bool] = mapped_column(server_default=text("true"))
 
     def __repr__(self):
-        return f"Post(id={self.id},title={self.title},user_id={self.user_id},content={self.content})"
+        return (
+            f"Post(id={self.id},title={self.title},user_id={self.user_id},content={self.content})"
+        )

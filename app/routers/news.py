@@ -24,9 +24,7 @@ async def get_categories(
     items = await news.list_categories(db)
     payload = [news_schemas.CategoryPublic.model_validate(item) for item in items]
 
-    await news_cache.set_json_cache(
-        r, key, [p.model_dump(mode="json") for p in payload]
-    )
+    await news_cache.set_json_cache(r, key, [p.model_dump(mode="json") for p in payload])
 
     return payload
 
@@ -46,9 +44,7 @@ async def get_news_list(
         return news_schemas.NewsListPublic.model_validate(cached)
 
     items, total = await news.list_news(db, category_id, page, page_size)
-    result = news_schemas.NewsListPublic.model_validate(
-        {"items": items, "total": total}
-    )
+    result = news_schemas.NewsListPublic.model_validate({"items": items, "total": total})
 
     await news_cache.set_json_cache(r, key, result.model_dump(mode="json"))
 

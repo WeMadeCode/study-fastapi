@@ -21,9 +21,7 @@ async def create_post_for_user(
 ):
     user = await users.get_user(db, user_id)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return await posts.create_post(db, user, post_in)
 
 
@@ -31,7 +29,5 @@ async def create_post_for_user(
 async def list_posts_for_user(user_id: int, db: AsyncSession = Depends(get_async_db)):  # noqa: B008
     user = await users.get_user(db, user_id)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return await posts.get_user_posts(db, user)

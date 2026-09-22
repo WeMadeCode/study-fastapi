@@ -22,9 +22,7 @@ class History(Base):
         Index("idx_view_time", "view_time"),
     )
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True, comment="历史ID"
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="历史ID")
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey(User.id), nullable=False, comment="用户ID"
     )

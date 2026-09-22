@@ -24,12 +24,7 @@ async def get_user(db: AsyncSession, user_id: int):
 
 
 async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100):
-    sel = (
-        select(users.User)
-        .options(selectinload(users.User.posts))
-        .offset(skip)
-        .limit(limit)
-    )
+    sel = select(users.User).options(selectinload(users.User.posts)).offset(skip).limit(limit)
     result = await db.scalars(sel)
     return list(result)
 
@@ -50,7 +45,5 @@ async def delete_user(db: AsyncSession, user: users.User):
 async def get_user_with_posts(db: AsyncSession, user_id: int):
     """用户 + 帖子一起取(异步世界必须显式加载关联)。"""
     return await db.scalar(
-        select(users.User)
-        .options(selectinload(users.User.posts))
-        .where(users.User.id == user_id)
+        select(users.User).options(selectinload(users.User.posts)).where(users.User.id == user_id)
     )

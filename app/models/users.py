@@ -15,9 +15,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(50))
-    password: Mapped[str] = mapped_column(
-        String(255), nullable=False, comment="密码（加密存储）"
-    )
+    password: Mapped[str] = mapped_column(String(255), nullable=False, comment="密码（加密存储）")
     gender: Mapped[str | None] = mapped_column(
         Enum("male", "female", "unknown", name="gender"),
         comment="性别",

@@ -21,9 +21,7 @@ class Favorite(Base):
         Index("fk_favorite_news_idx", "news_id"),
     )
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True, comment="收藏ID"
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="收藏ID")
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey(User.id), nullable=False, comment="用户ID"
     )

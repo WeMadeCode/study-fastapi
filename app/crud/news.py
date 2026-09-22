@@ -4,9 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import news
 
 
-async def list_news(
-    db: AsyncSession, category_id: int | None, page: int, page_size: int
-):
+async def list_news(db: AsyncSession, category_id: int | None, page: int, page_size: int):
     stmt = select(news.News).order_by(news.News.publish_time.desc())
     count_stmt = select(func.count()).select_from(news.News)
     if category_id is not None:
