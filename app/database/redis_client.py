@@ -3,7 +3,7 @@ from typing import Any
 import json
 
 
-from study_fastapi.config.config import settings
+from app.config.config import settings
 
 redis_client = Redis.from_url(
     settings.redis_url,

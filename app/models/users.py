@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from study_fastapi.database.pgsql_client import Base
+from app.database.pgsql_client import Base
 
 if TYPE_CHECKING:
     from .posts import Post

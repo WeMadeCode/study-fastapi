@@ -1,8 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from study_fastapi.models import posts, users
-from study_fastapi.schemas.posts import PostCreate
+from app.models import posts, users
+from app.schemas.posts import PostCreate
 
 
 async def create_post(db: AsyncSession, user: users.User, post_in: PostCreate):

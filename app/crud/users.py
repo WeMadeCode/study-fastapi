@@ -2,8 +2,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from study_fastapi.models import users
-from study_fastapi.schemas.users import UserCreate, UserUpdate
+from app.models import users
+from app.schemas.users import UserCreate, UserUpdate
 
 
 async def create_user(db: AsyncSession, user_in: UserCreate):

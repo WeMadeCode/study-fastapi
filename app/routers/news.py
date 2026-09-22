@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from study_fastapi.cache import news_cache
-from study_fastapi.crud import news
-from study_fastapi.database.pgsql_client import get_async_db
-from study_fastapi.database.redis_client import get_redis
-from study_fastapi.schemas import news as news_schemas
+from app.cache import news_cache
+from app.crud import news
+from app.database.pgsql_client import get_async_db
+from app.database.redis_client import get_redis
+from app.schemas import news as news_schemas
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 

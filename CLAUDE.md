@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 架构
 
-src 布局 + uv,Python 3.13。请求链路:`main.py` 注册 routers → routers(接口层,只做校验和 404/409 转换)→ `crud.py`(所有数据库操作,接收 AsyncSession)→ models / schemas。
+app 布局 + uv,Python 3.13。请求链路:`main.py` 注册 routers → routers(接口层,只做校验和 404/409 转换)→ `crud.py`(所有数据库操作,接收 AsyncSession)→ models / schemas。
 
 - **异步全链路**:`database/pgsql_client.py` 的 `create_async_engine`(psycopg 异步驱动)+ `async_sessionmaker(expire_on_commit=False)`;`get_async_db` 作为依赖注入 AsyncSession,routers/crud 均为 async。
 - **Base 基类**:`pgsql_client.py` 里的 `Base` 自带 `create_at`/`update_at` 时间戳列,所有模型自动继承。

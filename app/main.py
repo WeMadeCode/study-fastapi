@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from study_fastapi.routers import news, posts, users
+from app.routers import news, posts, users
 
 app = FastAPI(title="Study Fastapi")
 app.include_router(users.router)

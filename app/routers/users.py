@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from study_fastapi.crud import users
-from study_fastapi.database.pgsql_client import get_async_db
-from study_fastapi.schemas.users import UserCreate, UserPublic, UserUpdate
+from app.crud import users
+from app.database.pgsql_client import get_async_db
+from app.schemas.users import UserCreate, UserPublic, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 

@@ -3,9 +3,9 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Index, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
-from study_fastapi.database.pgsql_client import Base
-from study_fastapi.models.news import News
-from study_fastapi.models.users import User
+from app.database.pgsql_client import Base
+from app.models.news import News
+from app.models.users import User
 
 
 class History(Base):

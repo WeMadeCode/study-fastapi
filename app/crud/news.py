@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from study_fastapi.models import news
+from app.models import news
 
 
 async def list_news(

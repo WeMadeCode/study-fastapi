@@ -3,9 +3,9 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from study_fastapi import models  # type: ignore # noqa: F401
-from study_fastapi.config.config import settings
-from study_fastapi.database.pgsql_client import Base
+from app import models  # type: ignore # noqa: F401
+from app.config.config import settings
+from app.database.pgsql_client import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

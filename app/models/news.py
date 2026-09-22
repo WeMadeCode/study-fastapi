@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from study_fastapi.database.pgsql_client import Base
+from app.database.pgsql_client import Base
 
 
 class Category(Base):

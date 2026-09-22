@@ -7,11 +7,11 @@ COPY pyproject.toml uv.lock ./
 # — 装依赖。--frozen 表示严格按 uv.lock 装（和你本地 uv sync 行为一致）；--no-install-project 表示先不装项目本身（因为代码还没拷进来）。
 RUN pip install uv && uv sync --frozen --no-dev --no-install-project
 # — 这时候才拷代码并安装项目本身。
-COPY src ./src
+COPY app ./app
 COPY README.md ./ 
 RUN uv sync --frozen --no-dev
 #  — 只是声明“本应用监听 8000 端口”，起文档作用，不做实际端口映射。
 EXPOSE 8000
 # --host 0.0.0.0：必须的！容器里 127.0.0.1 只指容器自己，写 localhost 外面就访问不到了
 # uv run：在虚拟环境里执行，不用手动 source .venv/bin/activate
-CMD ["uv", "run", "uvicorn", "study_fastapi.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

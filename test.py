@@ -1,6 +1,5 @@
 import asyncio
 
-
 async def ticker():
     print("  步骤 1")
     await asyncio.sleep(0)      # sleep(0) = "我主动让一下,立刻排回队列"

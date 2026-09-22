@@ -10,15 +10,16 @@ dependencies = [
     "greenlet>=3.5.6",
     "psycopg[binary]>=3.3.5",
     "pydantic-settings>=2.15.0",
-    "pydantic[email,emial]>=2.13.5",
+    "pydantic[email]>=2.13.5",
     "redis>=8.1.0",
     "sqlalchemy>=2.0",
     "uvicorn[standard]>=0.53.0",
 ]
 
-[project.scripts]
-study-fastapi = "study_fastapi:main"
-
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = "app"
