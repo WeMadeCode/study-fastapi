@@ -1,3 +1,10 @@
+# 项目启动
+```sh
+uv sync
+
+uv run uvicorn app.main:app --reload 
+```
+
 # Docker 常用命令
 ```sh
 # 1. Compose 日常操作
