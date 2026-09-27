@@ -24,9 +24,10 @@ class User(Base):
 
     is_active: Mapped[bool] = mapped_column(default=True)
     bio: Mapped[str | None] = mapped_column(String(500))
-    posts: Mapped[list["Post"]] = relationship(
-        back_populates="author", cascade="all, delete-orphan"
-    )
+    posts: Mapped[list["Post"]] = relationship(back_populates="author", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"User(id={self.id},email={self.email},name={self.name},is_active={self.is_active},created_at={self.create_at})"
+        return (
+            f"User(id={self.id},email={self.email},name={self.name},"
+            f"is_active={self.is_active},created_at={self.create_at})"
+        )

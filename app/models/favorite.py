@@ -22,12 +22,8 @@ class Favorite(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="收藏ID")
-    user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey(User.id), nullable=False, comment="用户ID"
-    )
-    news_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey(News.id), nullable=False, comment="新闻ID"
-    )
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey(User.id), nullable=False, comment="用户ID")
+    news_id: Mapped[int] = mapped_column(Integer, ForeignKey(News.id), nullable=False, comment="新闻ID")
 
     def __repr__(self):
         return f"<Favorite(id={self.id}, user_id={self.user_id}, news_id={self.news_id}, created_at={self.create_at})>"

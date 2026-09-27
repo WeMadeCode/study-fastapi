@@ -32,13 +32,9 @@ class News(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="新闻内容")
     image: Mapped[str | None] = mapped_column(String(255), comment="封面图片URL")
     author: Mapped[str | None] = mapped_column(String(50), comment="作者")
-    category_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("news_category.id"), nullable=False, comment="分类ID"
-    )
+    category_id: Mapped[int] = mapped_column(Integer, ForeignKey("news_category.id"), nullable=False, comment="分类ID")
     views: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="浏览量")
-    publish_time: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now, comment="发布时间"
-    )
+    publish_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="发布时间")
 
     def __repr__(self):
         return f"<News(id={self.id}, title='{self.title}', views={self.views})>"

@@ -26,18 +26,24 @@ module-root = ""
 module-name = "app"
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN"]
+ignore = ["ANN2"]   # 你的原则:返回类型能推导,不强制写(ANN2xx 全是返回标注规则)
 
 [tool.mypy]
 python_version = "3.13"
 
 [[tool.mypy.overrides]]
 module = ["app.services.llm.*", "scripts.*"]
-strict = true
+# 遵守"能推导则不写":参数必须标(ruff ANN001 兜底),返回可省,推断类型照常检查
+check_untyped_defs = true      # 完全没标注的函数,函数体也检查
+disallow_any_generics = true   # 裸 list 禁止,必须 list[str]
+no_implicit_optional = true    # str = None 必须写成 str | None
+warn_return_any = true         # 返回值里混进 Any 要警告
+warn_unused_ignores = true     # 多余的 type: ignore 要报
 
 [dependency-groups]
 dev = [

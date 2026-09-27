@@ -16,7 +16,7 @@ async def main():
 
     reply = await llm_client.chat(message)
 
-    print(reply)
+    print(reply.upper())
 
 
 if __name__ == "__main__":

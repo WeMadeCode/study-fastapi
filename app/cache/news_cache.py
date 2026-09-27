@@ -1,9 +1,10 @@
 import json
-from typing import Any
 
 from redis.asyncio import Redis
 
 NEWS_LIST_TTL = 60  # 列表缓存存活 60 秒
+
+type Json = None | bool | int | float | str | list[Json] | dict[str, Json]
 
 
 def build_list_key(category_id: int | None, page: int, page_size: int):
@@ -25,5 +26,5 @@ async def get_json_cache(r: Redis, key: str):
     return json.loads(data)
 
 
-async def set_json_cache(r: Redis, key: str, payload: Any, expire: int = NEWS_LIST_TTL):
+async def set_json_cache(r: Redis, key: str, payload: Json, expire: int = NEWS_LIST_TTL):
     await r.set(key, json.dumps(payload, ensure_ascii=False), ex=expire)

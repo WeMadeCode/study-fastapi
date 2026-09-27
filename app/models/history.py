@@ -23,15 +23,9 @@ class History(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="历史ID")
-    user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey(User.id), nullable=False, comment="用户ID"
-    )
-    news_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey(News.id), nullable=False, comment="新闻ID"
-    )
-    view_time: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now, nullable=False, comment="浏览时间"
-    )
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey(User.id), nullable=False, comment="用户ID")
+    news_id: Mapped[int] = mapped_column(Integer, ForeignKey(News.id), nullable=False, comment="新闻ID")
+    view_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False, comment="浏览时间")
 
     def __repr__(self):
         return f"<History(id={self.id}, user_id={self.user_id}, news_id={self.news_id}, view_time={self.view_time})>"
