@@ -22,5 +22,13 @@ class LLMClient:
             raise RuntimeError("模型未返回文本内容")
         return content
 
+    async def stream_chat(self, messages: list[ChatCompletionMessageParam]):
+        stream = await self._client.chat.completions.create(model=self._model, messages=messages, stream=True)
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta is not None:
+                yield delta
+
 
 llm_client = LLMClient()
