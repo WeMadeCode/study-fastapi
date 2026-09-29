@@ -69,9 +69,12 @@ uv run alembic upgrade head
 
 # Lint 检查
 ```
-# 格式化
+# 格式化（缩进、空行、引号风格）
 uv run ruff format app scripts
 
-# Lint 检查
+# Lint 检查（代码规范，如未使用的 import、ANN 参数标注缺失）
+uv run ruff check app scripts
+
+# 类型检查
 uv run mypy app scripts
 ```
