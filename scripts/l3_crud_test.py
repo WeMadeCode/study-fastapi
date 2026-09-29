@@ -1,6 +1,7 @@
 import asyncio
 
 from sqlalchemy import func, select
+
 from app.crud import chats
 from app.database.pgsql_client import AsyncSessionLocal
 from app.models import messages

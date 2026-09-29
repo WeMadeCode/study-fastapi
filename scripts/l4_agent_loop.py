@@ -1,5 +1,4 @@
 import asyncio
-import json
 from typing import cast
 
 from openai import AsyncOpenAI
@@ -15,7 +14,8 @@ MAX_ROUNDS = 8  # 轮数上限:真实 Agent 的保命线,防模型死循环烧�
 
 async def main():
     messages: list[ChatCompletionMessageParam] = [
-        {"role": "user", "content": "北京现在几点了？天气怎么样？"},
+        {"role": "user", "content": "北京现在几点了？"},
+        {"role": "user", "content": "天气怎么样？"},
     ]
     # 协议海关:TOOLS_SCHEMA 推断为 dict[str, object],跨进 SDK 边界需要一次 cast
     tool_params = cast(list[ChatCompletionToolParam], TOOLS_SCHEMA)

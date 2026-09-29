@@ -1,5 +1,5 @@
 from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletionMessageParam
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
 
 from app.config.config import settings
 
@@ -29,6 +29,13 @@ class LLMClient:
             delta = chunk.choices[0].delta.content
             if delta is not None:
                 yield delta
+
+    async def chat_with_tools(
+        self,
+        messages: list[ChatCompletionMessageParam],
+        tools: list[ChatCompletionToolParam],
+    ):
+        return await self._client.chat.completions.create(model=self._model, messages=messages, tools=tools)
 
 
 llm_client = LLMClient()

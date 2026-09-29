@@ -24,12 +24,12 @@ def make_list():
     return result
 
 
-def make_gen():
-    for i in range(3):
-        yield i
+# def make_gen():
+#     for i in range(3):
+#         yield i
 
 
-print(list(make_gen()))
+# print(list(make_gen()))
 
 
 # def echo():

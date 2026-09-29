@@ -11,6 +11,7 @@ from openai.types.chat import (
 from app.crud import chats
 from app.database.pgsql_client import AsyncSessionLocal
 from app.schemas.chats import ChatCreate
+from app.services.agent import run_agent
 from app.services.llm.client import llm_client
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -54,3 +55,9 @@ async def stream_chat(payload: ChatCreate):
                 yield f"data: {data}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.post("/agent")
+async def agent_chat(payload: ChatCreate):
+    replay = await run_agent(payload.message)
+    return {"reply": replay}
