@@ -66,3 +66,12 @@ uv run alembic upgrade head
 # 4. 验证
 # 打开 IntelliJ IDEA 验证
 ```
+
+# Lint 检查
+```
+# 格式化
+uv run ruff format app scripts
+
+# Lint 检查
+uv run mypy app scripts
+```
