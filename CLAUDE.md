@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 报错分析:带用户读 traceback(从下往上、只看自己文件的帧),让用户自己改。
 - 用户常见手滑:拼写错误(contet/emial/DATATBASE_URL)、重写文件时丢掉之前修过的内容、跳过验证步骤——提醒自查,不要直接动手改。
 - 注意项目架构规范、代码规范，需要按照官方标准。
+- 重点注意Python的类型安全问题。
 
 ## 架构
 
