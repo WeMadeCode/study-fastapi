@@ -78,3 +78,9 @@ uv run ruff check app scripts
 # 类型检查
 uv run mypy app scripts
 ```
+
+
+# 跑测试代码
+```
+uv run python scripts/xxx.py
+```
