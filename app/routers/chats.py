@@ -41,9 +41,9 @@ async def stream_chat(payload: ChatCreate):
             llm_messages: list[ChatCompletionMessageParam] = []
 
             for m in history:
-                if m.role == "user":
+                if m.role == "user" and m.content is not None:
                     llm_messages.append(ChatCompletionUserMessageParam(role="user", content=m.content))
-                elif m.role == "assistant":
+                elif m.role == "assistant" and m.content is not None:
                     llm_messages.append(ChatCompletionAssistantMessageParam(role="assistant", content=m.content))
 
             yield f"data: {json.dumps({'conversation_id': conversation.id}, ensure_ascii=False)}\n\n"

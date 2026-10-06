@@ -10,7 +10,7 @@ from app.models import messages
 async def main():
     async with AsyncSessionLocal() as db:
         # 1. 建立会话
-        conversation = await chats.create_conversation(db)
+        conversation = await chats.create_conversation(db,title="l3-crud-test")
         print("会话：", conversation.id, conversation.title)
 
         # 2. 两条消息
