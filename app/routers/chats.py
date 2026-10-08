@@ -2,11 +2,6 @@ import json
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from openai.types.chat import (
-    ChatCompletionAssistantMessageParam,
-    ChatCompletionMessageParam,
-    ChatCompletionUserMessageParam,
-)
 
 from app.crud import chats
 from app.database.pgsql_client import AsyncSessionLocal
@@ -38,14 +33,7 @@ async def stream_chat(payload: ChatCreate):
                 raise HTTPException(status_code=404, detail="会话不存在")
             await chats.append_message(db, conversation, "user", payload.message)
             history = await chats.get_conversation_messages(db, conversation)
-            llm_messages: list[ChatCompletionMessageParam] = []
-
-            for m in history:
-                if m.role == "user" and m.content is not None:
-                    llm_messages.append(ChatCompletionUserMessageParam(role="user", content=m.content))
-                elif m.role == "assistant" and m.content is not None:
-                    llm_messages.append(ChatCompletionAssistantMessageParam(role="assistant", content=m.content))
-
+            llm_messages = build_llm_messages([chats.message_to_dict(m) for m in history])
             yield f"data: {json.dumps({'conversation_id': conversation.id}, ensure_ascii=False)}\n\n"
 
             reply_parts: list[str] = []
@@ -77,8 +65,8 @@ async def agent_chat(payload: ChatCreate) -> dict[str, str | int]:
         await chats.append_message(db, conversation, "user", payload.message)
         history = await chats.get_conversation_messages(db, conversation)
 
-    llm_message = build_llm_messages([chats.message_to_dict(m) for m in history])
-    reply, new_stored = await run_agent(llm_message)
+    llm_messages = build_llm_messages([chats.message_to_dict(m) for m in history])
+    reply, new_stored = await run_agent(llm_messages)
 
     # 3. loop 收敛后一次性写轨迹
     async with AsyncSessionLocal() as db:
