@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:18
+    image: pgvector/pgvector:0.8.7-pg18-trixie
     container_name: study-pgsql
     environment:
       POSTGRES_USER: postgres
@@ -11,7 +11,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U study -d study_fastapi"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d study_fastapi"]
       interval: 3s
       timeout: 3s
       retries: 10
