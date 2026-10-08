@@ -11,7 +11,7 @@ from openai.types.chat import (
 from app.crud import chats
 from app.database.pgsql_client import AsyncSessionLocal
 from app.schemas.chats import ChatCreate
-from app.services.agent import run_agent
+from app.services.agent import build_llm_messages, run_agent
 from app.services.llm.client import llm_client
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -58,6 +58,36 @@ async def stream_chat(payload: ChatCreate):
 
 
 @router.post("/agent")
-async def agent_chat(payload: ChatCreate):
-    replay = await run_agent(payload.message)
-    return {"reply": replay}
+async def agent_chat(payload: ChatCreate) -> dict[str, str | int]:
+    # 1. body 阶段：建/查会话（与/stream 同款）
+    async with AsyncSessionLocal() as db:
+        if payload.conversation_id is None:
+            conversation = await chats.create_conversation(db)
+        else:
+            conversation = await chats.get_conversation(db, payload.conversation_id)
+            if conversation is None:
+                raise HTTPException(status_code=404, detail="会话不存在")
+    conversation_id = conversation.id
+
+    # 2. 装载历史：存user-> 读全量
+    async with AsyncSessionLocal() as db:
+        conversation = await chats.get_conversation(db, conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        await chats.append_message(db, conversation, "user", payload.message)
+        history = await chats.get_conversation_messages(db, conversation)
+
+    llm_message = build_llm_messages([chats.message_to_dict(m) for m in history])
+    reply, new_stored = await run_agent(llm_message)
+
+    # 3. loop 收敛后一次性写轨迹
+    async with AsyncSessionLocal() as db:
+        conversation = await chats.get_conversation(db, conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        for m in new_stored:
+            await chats.append_message(
+                db, conversation, m["role"], m["content"], tool_call_id=m["tool_call_id"], tool_calls=m["tool_calls"]
+            )
+
+    return {"reply": reply, "conversation_id": conversation_id}
