@@ -1,8 +1,18 @@
 import httpx
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
+from pydantic import BaseModel
 
 from app.config.config import settings
+
+
+class EmbeddingData(BaseModel):
+    embedding: list[float]
+    object: str
+
+
+class EmbeddingResponse(BaseModel):
+    data: EmbeddingData
 
 
 class LLMClient:
@@ -54,7 +64,8 @@ class LLMClient:
                 }
                 resp = await http.post(url, json=body, headers=headers)
                 resp.raise_for_status()
-                vectors.append(resp.json()["data"]["embedding"])
+                parsed = EmbeddingResponse.model_validate(resp.json())
+                vectors.append(parsed.data.embedding)
 
         return vectors
 
