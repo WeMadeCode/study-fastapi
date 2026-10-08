@@ -1,3 +1,4 @@
+import httpx
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
 
@@ -36,6 +37,26 @@ class LLMClient:
         tools: list[ChatCompletionToolParam],
     ):
         return await self._client.chat.completions.create(model=self._model, messages=messages, tools=tools)
+
+    async def embed(self, texts: list[str]):
+
+        url = f"{settings.ark_base_url.rstrip('/')}/embeddings/multimodal"
+        headers = {"Authorization": f"Bearer {settings.ark_api_key}"}
+        vectors: list[list[float]] = []
+
+        async with httpx.AsyncClient(timeout=settings.ark_timeout) as http:
+            for t in texts:
+                body: dict[str, object] = {
+                    "model": settings.ark_embedding_model,
+                    "input": [{"type": "text", "text": t}],
+                    "dimensions": 1024,
+                    "encoding_format": "float",
+                }
+                resp = await http.post(url, json=body, headers=headers)
+                resp.raise_for_status()
+                vectors.append(resp.json()["data"]["embedding"])
+
+        return vectors
 
 
 llm_client = LLMClient()

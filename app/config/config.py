@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     ark_base_url: str = ""
     ark_timeout: int = 60
     ark_model: str = ""
+    ark_embedding_model: str = ""
 
     @field_validator("database_url")
     @classmethod
