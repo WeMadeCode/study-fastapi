@@ -1,4 +1,4 @@
-"""L6 练习:第一次真实 embedding——验证模型可用性,拿到向量维度,亲眼看向量的语义性。"""
+"""L6 练习：第一次真实 embedding——验证模型可用性,拿到向量维度,亲眼看向量的语义性。"""
 
 import asyncio
 import math

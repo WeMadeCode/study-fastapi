@@ -1,4 +1,4 @@
-"""L6 练习:向量表读写闭环——随机向量验证 建表→插入→cosine 检索→返回类型,不调 API。"""
+"""L6练习：向量表读写闭环——随机向量验证 建表→插入→cosine 检索→返回类型,不调 API。"""
 
 import asyncio
 import random
@@ -21,7 +21,7 @@ async def main():
                 session.add(category)
                 await session.flush()
                 category_id = category.id
-            news = News(title="RAG 测试新闻", content="占位新闻：只为拿到news_id，category_id = category_id")
+            news = News(title="RAG 测试新闻", content="占位新闻：只为拿到news_id", category_id=category_id)
             session.add(news)
             await session.flush()
             news_id = news.id
