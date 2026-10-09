@@ -73,9 +73,11 @@ async def agent_chat(payload: ChatCreate) -> dict[str, str | int]:
         conversation = await chats.get_conversation(db, conversation_id)
         if conversation is None:
             raise HTTPException(status_code=404, detail="会话不存在")
-        for m in new_stored:
-            await chats.append_message(
-                db, conversation, m["role"], m["content"], tool_call_id=m["tool_call_id"], tool_calls=m["tool_calls"]
-            )
+        # for m in new_stored:
+        #     await chats.append_message(
+        #         db, conversation, m["role"], m["content"], tool_call_id=m["tool_call_id"], tool_calls=m["tool_calls"]
+        #     )
+        await chats.append_messages(db, conversation, new_stored)
+
 
     return {"reply": reply, "conversation_id": conversation_id}

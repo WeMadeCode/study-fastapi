@@ -46,6 +46,24 @@ async def append_message(
     await db.refresh(message)
     return message
 
+async def append_messages(db: AsyncSession, conversation: conversations.Conversation, msgs: list[MessageDict]):
+    """整条轨迹一个事务写入。
+
+    轨迹 = assistant(tool_calls) → tool → … → assistant(最终回答)的完整序列,
+    必须原子生效:写到一半挂掉会留下"有申请单没下文"的半截轨迹,
+    下次装载喂给 API 直接 400。所以循环里只 add,循环外一次 commit。
+    """
+    db.add_all(
+        messages.Message(
+            role=m["role"],
+            content=m["content"],
+            conversation=conversation,
+            tool_call_id=m["tool_call_id"],
+            tool_calls=m["tool_calls"],
+        )
+        for m in msgs
+    )
+    await db.commit()
 
 async def get_conversation_messages(db: AsyncSession, conversation: conversations.Conversation):
     stmt = (
