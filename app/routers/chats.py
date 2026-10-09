@@ -47,7 +47,7 @@ async def stream_chat(payload: ChatCreate):
 
 @router.post("/agent")
 async def agent_chat(payload: ChatCreate) -> dict[str, str | int]:
-    # 1. body 阶段：建/查会话（与/stream 同款）
+    # 1. body 阶段：新建/查询会话（与/stream 同款）
     async with AsyncSessionLocal() as db:
         if payload.conversation_id is None:
             conversation = await chats.create_conversation(db)
@@ -57,7 +57,7 @@ async def agent_chat(payload: ChatCreate) -> dict[str, str | int]:
                 raise HTTPException(status_code=404, detail="会话不存在")
     conversation_id = conversation.id
 
-    # 2. 装载历史：存user-> 读全量
+    # 2. 装载历史：存user -> 读全量会话
     async with AsyncSessionLocal() as db:
         conversation = await chats.get_conversation(db, conversation_id)
         if conversation is None:

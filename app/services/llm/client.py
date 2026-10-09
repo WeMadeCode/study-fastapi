@@ -49,7 +49,7 @@ class LLMClient:
         return await self._client.chat.completions.create(model=self._model, messages=messages, tools=tools)
 
     async def embed(self, texts: list[str]):
-
+        """向量化"""
         url = f"{settings.ark_base_url.rstrip('/')}/embeddings/multimodal"
         headers = {"Authorization": f"Bearer {settings.ark_api_key}"}
         vectors: list[list[float]] = []

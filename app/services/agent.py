@@ -70,7 +70,7 @@ async def run_agent(messages: list[ChatCompletionMessageParam]):
             if tool_call.type != "function":
                 raise RuntimeError("收到 custom 工具调用,暂不支持")
 
-            result = execute_tool(tool_call.function.name, tool_call.function.arguments)
+            result = await execute_tool(tool_call.function.name, tool_call.function.arguments)
             messages.append(
                 {
                     "role": "tool",

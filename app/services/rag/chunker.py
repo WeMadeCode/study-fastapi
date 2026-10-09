@@ -14,13 +14,13 @@ CHUNK_OVERLAP = 50
 _SENTENCE_RE = re.compile(r"[^。！？!?；;\n]+[。！？!?；;\n]*")
 
 
-def _split_sentences(text: str) -> list[str]:
+def _split_sentences(text: str):
     """切成最小语义单元:句子。丢纯空白,保留标点。"""
     return [seg for seg in (s.strip() for s in _SENTENCE_RE.findall(text)) if seg]
 
 
-def split_text(text: str) -> list[str]:
-    """按句子贪心聚块：满了就落块，尾部回带CHUNK_OVERLAP 开新块。"""
+def split_text(text: str):
+    """切块，贪心算法"""
     sentences = _split_sentences(text)
     chunks: list[str] = []
     buf: list[str] = []

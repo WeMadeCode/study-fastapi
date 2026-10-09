@@ -16,35 +16,36 @@ services:
       timeout: 3s
       retries: 10
 
-  app:
-    build: .
-    container_name: study-app
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql+psycopg://study:study123@db:5432/study_fastapi
-    depends_on:
-      db:
-        condition: service_healthy
+  # app:
+  #   build: .
+  #   container_name: study-app
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     DATABASE_URL: postgresql+psycopg://study:study123@db:5432/study_fastapi
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
 
-  mysql:
-    image: mysql:8.4
-    container_name: study-mysql
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-    environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: study_fastapi
-      MYSQL_USER: mysql
-      MYSQL_PASSWORD: study123
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysqldata:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
-      interval: 3s
-      timeout: 3s
-      retries: 10
+  # mysql:
+  #   image: mysql:8.4
+  #   container_name: study-mysql
+  #   command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: root123
+  #     MYSQL_DATABASE: study_fastapi
+  #     MYSQL_USER: mysql
+  #     MYSQL_PASSWORD: study123
+  #   ports:
+  #     - "3306:3306"
+  #   volumes:
+  #     - mysqldata:/var/lib/mysql
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+  #     interval: 3s
+  #     timeout: 3s
+  #     retries: 10
+    
   redis:
     image: redis:8.10
     container_name: study-redis

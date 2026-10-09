@@ -24,7 +24,7 @@ SEED_NEWS: list[tuple[str, str]] = [
     ),
 ]
 
- 
+
 async def main():
     async with AsyncSessionLocal() as session:
         # 素材不足则注入样文(category 复用已有或新建)

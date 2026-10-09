@@ -2,19 +2,48 @@
 
 边界约定:本模块不 import openai。LLM 协议类型止步于 services/llm,
 这里只认纯字符串协议(工具名 + arguments JSON)。
+
+工具合同(泛化后):async fn(args: dict[str, object]) -> str
+execute_tool 只负责查表/解 JSON/按 schema 验必填,参数解包下放给每个工具。
 """
 
 import json
-from collections.abc import Callable
-from typing import Literal, TypedDict
+from collections.abc import Awaitable, Callable
+from typing import Literal, TypedDict, cast
+
+from app.database.pgsql_client import AsyncSessionLocal
+from app.services.llm.client import llm_client
+from app.services.rag import retriever
 
 
-def _get_current_weather(city: str):
+async def _get_current_weather(args: dict[str, object]):
+    city = args["city"]  # 必填参数已由 execute_tool 按 schema 校验过
     return json.dumps({"city": city, "weather": "晴", "temperature": 24}, ensure_ascii=False)
 
 
-def _get_city_time(city: str):
+async def _get_city_time(args: dict[str, object]):
+    city = args["city"]
     return json.dumps({"city": city, "time": "2026-09-29 14:30"}, ensure_ascii=False)
+
+
+async def _search_knowledge_base(args: dict[str, object]):
+    question = args["question"]
+    if not isinstance(question, str):
+        return json.dumps({"error": "question 必须是字符串"}, ensure_ascii=False)
+
+    query_vec = (await llm_client.embed([question]))[0]
+
+    async with AsyncSessionLocal() as db:
+        hits = await retriever.search_similar_chunks(db, query_vec)
+
+    return json.dumps(
+        {
+            "result": [
+                {"source": title, "content": content, "distance": round(dist, 4)} for title, content, dist in hits
+            ]
+        },
+        ensure_ascii=False,
+    )
 
 
 class _ParamsSchema(TypedDict):
@@ -64,21 +93,51 @@ TOOLS_SCHEMA: list[ToolParam] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_knowledge_base",
+            "description": "检索站内知识库(新闻/资料)。遇到知识类、事实类问题时先调用它再回答;返回 results 为空数组表示知识库中没有相关内容",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string", "description": "要检索的问题或关键词,尽量完整保留用户原意"},
+                },
+                "required": ["question"],
+            },
+        },
+    },
 ]
 
 
 # 名字 → 真正干活的函数。模型只报名字,执行靠这张表
-TOOL_REGISTRY: dict[str, Callable[[str], str]] = {
+ToolFunc = Callable[[dict[str, object]], Awaitable[str]]
+TOOL_REGISTRY: dict[str, ToolFunc] = {
     "get_current_weather": _get_current_weather,
     "get_city_time": _get_city_time,
+    "search_knowledge_base": _search_knowledge_base,
 }
 
 
-def execute_tool(name: str, arguments_json: str):
-    """执行一张"申请单":查注册表 → 解参数 → 调函数。
+def _validate_required(name: str, args: dict[str, object]):
+    """按 TOOLS_SCHEMA 校验必填参数。
 
-    关键设计:任何失败都返回 error JSON,而不是抛异常——
-    因为工具结果是要喂回模型的,错误信息也是信息(模型看到 error 能自我纠正)。
+    schema 是唯一事实源:给模型看的是它,给执行层验参数的也是它,改一处两边同步。
+    """
+    for tool in TOOLS_SCHEMA:
+        if tool["function"]["name"] == name:
+            missing = [key for key in tool["function"]["parameters"]["required"] if key not in args]
+            if missing:
+                return json.dumps({"error": f"缺少必填参数: {', '.join(missing)}"}, ensure_ascii=False)
+            return None
+    return None
+
+
+async def execute_tool(name: str, arguments_json: str):
+    """执行一张"申请单":查注册表 → 解参数 → schema 校验 → await 函数。
+
+    关键设计不变:任何失败都返回 error JSON,而不是抛异常——
+    工具结果是要喂回模型的,错误信息也是信息(模型看到 error 能自我纠正)。
     """
     fn = TOOL_REGISTRY.get(name)
     if fn is None:
@@ -89,9 +148,14 @@ def execute_tool(name: str, arguments_json: str):
     except json.JSONDecodeError:
         return json.dumps({"error": "arguments 不是合法 JSON"}, ensure_ascii=False)
 
-    try:
-        city = args["city"]
-    except KeyError:
-        return json.dumps({"error": "缺少必填参数：city"}, ensure_ascii=False)
+    # json.loads 返回 Any:isinstance 一举两得,运行时防御 + 类型收窄
+    if not isinstance(args, dict):
+        return json.dumps({"error": "arguments 必须是 JSON 对象"}, ensure_ascii=False)
 
-    return fn(city)
+    args = cast(dict[str, object], args)
+
+    error = _validate_required(name, args)
+    if error is not None:
+        return error
+
+    return await fn(args)
