@@ -61,7 +61,8 @@ class CallResult(BaseModel):
     content: list[ContentBlock]
 
 
-SERVER_CMD = ["uvx", "mcp-server-time", "--local-timezone=Asia/Shanghai"]
+# SERVER_CMD = ["uvx", "mcp-server-time", "--local-timezone=Asia/Shanghai"]
+SERVER_CMD = ["uv", "run", "python", "scripts/l7_mcp_server.py"]
 
 
 async def send(writer: StreamWriter, msg: JsonRpcRequest):
@@ -155,7 +156,8 @@ async def main() -> None:
             "jsonrpc": "2.0",
             "id": 3,
             "method": "tools/call",
-            "params": {"name": "get_current_time", "arguments": {"timezone": "Asia/Shanghai"}},
+            "params": {"name": "search_knowledge_base", "arguments": {"question": "切块太大或太小分别有什么问题?"}},
+            # "params": {"name": "get_current_time", "arguments": {"timezone": "Asia/Shanghai"}},
         },
     )
     call = CallResult.model_validate(await recv_result(reader, 3))

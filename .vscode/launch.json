@@ -2,11 +2,19 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python Debugger: Current File",
+      "name": "Python Debugger: mcp_server",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/l7_mcp_server.py",
+      "justMyCode": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Python Debugger: mcp_client",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/scripts/l7_mcp_client.py",
-       "justMyCode": true,
+      "justMyCode": true,
       "console": "integratedTerminal"
     },
     {
@@ -17,7 +25,6 @@
       "args": ["study_fastapi.main:app", "--port", "8000"],
       "jinja": true,
       "justMyCode": true
-    },
-   
+    }
   ]
 }
