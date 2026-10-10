@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     ark_timeout: int = 60
     ark_model: str = ""
     ark_embedding_model: str = ""
+    mcp_kb_server_cmd: str = ""
 
     @field_validator("database_url")
     @classmethod

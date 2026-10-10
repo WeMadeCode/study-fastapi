@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import news
+from app.models import Category, news
 
 
 async def list_news(db: AsyncSession, category_id: int | None, page: int, page_size: int):
@@ -19,7 +19,7 @@ async def list_news(db: AsyncSession, category_id: int | None, page: int, page_s
 
 
 async def list_categories(db: AsyncSession):
-    stmt = select(news.Category).order_by(news.Category.sort_order)
+    stmt = select(Category).order_by(Category.sort_order)
     return list(await db.scalars(stmt))
 
 

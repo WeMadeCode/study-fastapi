@@ -15,11 +15,9 @@ from openai.types.chat import (
 
 from app.schemas.chats import MessageDict, StoredToolCall
 from app.services.llm.client import llm_client
-from app.services.tools import TOOLS_SCHEMA, execute_tool
+from app.services.tools import execute_tool, get_all_tool_schemas
 
 MAX_ROUNDS = 8
-
-_TOOL_PARAMS = cast(list[ChatCompletionToolParam], TOOLS_SCHEMA)
 
 
 def _tool_call_to_stored(tool_calls: list[ChatCompletionMessageToolCallUnion]) -> list[StoredToolCall]:
@@ -27,14 +25,13 @@ def _tool_call_to_stored(tool_calls: list[ChatCompletionMessageToolCallUnion]) -
     stored: list[StoredToolCall] = []
 
     for tc in tool_calls:
-        if tc.type != 'function':
+        if tc.type != "function":
             raise RuntimeError("收到 custom 工具调用,暂不支持")
-        stored.append({
-            "id":tc.id,
-            "type":tc.type,
-            "function":{"name":tc.function.name, "arguments":tc.function.arguments}
-        })
+        stored.append(
+            {"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+        )
     return stored
+
 
 async def run_agent(messages: list[ChatCompletionMessageParam]):
     """跑一个完整的 agentic loop,返回最终文本回答。
@@ -45,7 +42,8 @@ async def run_agent(messages: list[ChatCompletionMessageParam]):
     new_stored: list[MessageDict] = []
 
     for _ in range(1, MAX_ROUNDS + 1):
-        response = await llm_client.chat_with_tools(messages, _TOOL_PARAMS)
+        tool_params = cast(list[ChatCompletionToolParam], get_all_tool_schemas())
+        response = await llm_client.chat_with_tools(messages, tool_params)
         assistant_msg = response.choices[0].message
 
         # 唯一出口:没有申请单 = 最终回答

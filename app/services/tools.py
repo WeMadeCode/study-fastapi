@@ -13,6 +13,7 @@ from typing import Literal, TypedDict, cast
 
 from app.database.pgsql_client import AsyncSessionLocal
 from app.services.llm.client import llm_client
+from app.services.mcp.client import McpToolMeta  # 顶部 import 区
 from app.services.rag import retriever
 
 
@@ -97,7 +98,8 @@ TOOLS_SCHEMA: list[ToolParam] = [
         "type": "function",
         "function": {
             "name": "search_knowledge_base",
-            "description": "检索站内知识库(新闻/资料)。遇到知识类、事实类问题时先调用它再回答;返回 results 为空数组表示知识库中没有相关内容",
+            "description": """检索站内知识库(新闻/资料)。遇到知识类、事实类问题时先调用它再回答;
+            返回 results 为空数组表示知识库中没有相关内容""",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -112,11 +114,42 @@ TOOLS_SCHEMA: list[ToolParam] = [
 
 # 名字 → 真正干活的函数。模型只报名字,执行靠这张表
 ToolFunc = Callable[[dict[str, object]], Awaitable[str]]
+# MCP 调用通道:分发器模式——一个函数管全部工具,name 是参数
+McpCallFn = Callable[[str, dict[str, object]], Awaitable[str]]
 TOOL_REGISTRY: dict[str, ToolFunc] = {
     "get_current_weather": _get_current_weather,
     "get_city_time": _get_city_time,
     "search_knowledge_base": _search_knowledge_base,
 }
+
+
+# MCP 外接工具:name → 简历。启动时由 lifespan 注入,同名覆盖内置(外接视为最新版本,内置兜底)
+_mcp_schemas: dict[str, McpToolMeta] = {}
+# MCP 调用通道:与 ToolFunc 同形(合同同形),所以执行侧可以统一
+_mcp_call: McpCallFn | None = None
+
+
+def register_mcp_tools(tools: list[McpToolMeta], call_fn: McpCallFn):
+    """注入 MCP 工具清单与调用通道(main 的 lifespan 调用)。"""
+    global _mcp_call
+    for tool in tools:
+        _mcp_schemas[tool.name] = tool
+    _mcp_call = call_fn
+
+
+def get_all_tool_schemas() -> list[ToolParam]:
+    """给模型的工具简历全量:内置为底,MCP 同名覆盖、独有的追加。"""
+    schemas = {t["function"]["name"]: t for t in TOOLS_SCHEMA}
+    for name, tool in _mcp_schemas.items():
+        # cast 的诚实性:inputSchema 来自自家 server(它就是从 TOOLS_SCHEMA 转换的),同形有保证
+        schemas[name] = cast(
+            ToolParam,
+            {
+                "type": "function",
+                "function": {"name": tool.name, "description": tool.description, "parameters": tool.inputSchema},
+            },
+        )
+    return list(schemas.values())
 
 
 def _validate_required(name: str, args: dict[str, object]):
@@ -134,23 +167,13 @@ def _validate_required(name: str, args: dict[str, object]):
 
 
 async def execute_tool(name: str, arguments_json: str):
-    """执行一张"申请单":查注册表 → 解参数 → schema 校验 → await 函数。
-
-    关键设计不变:任何失败都返回 error JSON,而不是抛异常——
-    工具结果是要喂回模型的,错误信息也是信息(模型看到 error 能自我纠正)。
-    """
-    fn = TOOL_REGISTRY.get(name)
-    if fn is None:
-        return json.dumps({"error": f"未知工具: {name}"}, ensure_ascii=False)
-
     try:
         args = json.loads(arguments_json)
     except json.JSONDecodeError:
         return json.dumps({"error": "arguments 不是合法 JSON"}, ensure_ascii=False)
 
-    # json.loads 返回 Any:isinstance 一举两得,运行时防御 + 类型收窄
     if not isinstance(args, dict):
-        return json.dumps({"error": "arguments 必须是 JSON 对象"}, ensure_ascii=False)
+        return json.dumps({"error": "arguments 必须是 dict 对象"}, ensure_ascii=False)
 
     args = cast(dict[str, object], args)
 
@@ -158,4 +181,12 @@ async def execute_tool(name: str, arguments_json: str):
     if error is not None:
         return error
 
+    if name in _mcp_schemas:
+        if _mcp_call is None:
+            return json.dumps({"error": "MCP 调用通道未注册"}, ensure_ascii=False)
+        return await _mcp_call(name, args)
+
+    fn = TOOL_REGISTRY.get(name)
+    if fn is None:
+        return json.dumps({"error": f"未知工具: {name}"}, ensure_ascii=False)
     return await fn(args)
