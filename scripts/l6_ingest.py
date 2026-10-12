@@ -32,19 +32,18 @@ SEED_NEWS: list[tuple[str, str]] = [
 
 async def main():
     async with AsyncSessionLocal() as session:
-        # 素材不足则注入样文(category 复用已有或新建)
-        news_list = (await session.scalars(select(News))).all()
-        if len(news_list) < 3:
-            category_id = (await session.scalars(select(Category.id).limit(1))).first()
-            if category_id is None:
-                category = Category(name="AI 学习")
-                session.add(category)
-                await session.flush()
-                category_id = category.id
-            for title, content in SEED_NEWS:
+        category_id = (await session.scalars(select(Category.id).limit(1))).first()
+        if category_id is None:
+            category = Category(name="AI 学习")
+            session.add(category)
+            await session.flush()
+            category_id = category.id
+        for title, content in SEED_NEWS:
+            exists = (await session.scalars(select(News.id).where(News.title == title))).first()
+            if exists is None:
                 session.add(News(title=title, content=content, category_id=category_id))
-            await session.commit()
-            news_list = (await session.scalars(select(News))).all()
+        await session.commit()
+        news_list = (await session.scalars(select(News))).all()
 
         # 切块：收集 (news_id, chunk_index, 文本) 三元组
         pairs: list[tuple[int, int, str]] = []

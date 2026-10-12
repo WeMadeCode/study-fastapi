@@ -134,6 +134,7 @@ class McpClient:
             print(f"[mcp:{self._name}] 已关闭")
 
     async def _send(self, msg: JsonRpcRequest):
+        print(f"client send msg = {msg}")
         if self._writer is None:
             raise RuntimeError(f"[mcp:{self._name}] 未连接,先 start()")
         self._writer.write((json.dumps(msg, ensure_ascii=False) + "\n").encode())
@@ -147,6 +148,8 @@ class McpClient:
             if not line:
                 raise RuntimeError(f"[mcp:{self._name}] server 关闭了 stdout")
             msg = json.loads(line)
+            print(f"client receive msg = {msg}")
+
             if not isinstance(msg, dict):
                 continue
             resp = cast(JsonRpcResponse, msg)

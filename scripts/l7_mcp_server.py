@@ -27,6 +27,7 @@ SERVER_INFO = {"name": "study-kb-server", "version": "0.1"}
 
 def send(msg: dict[str, object]):
     """往 stdout 写一行协议消息。flush 是生死线:管道模式下 stdout 全缓冲,不 flush client 永远等不到。"""
+    print(f"server send msg = {msg}", file=sys.stderr)
     sys.stdout.write(json.dumps(msg, ensure_ascii=False) + "\n")
     sys.stdout.flush()
 
@@ -50,12 +51,15 @@ async def call_search_kb(arguments: dict[str, object]) -> dict[str, object]:
     return {"content": [{"type": "text", "text": raw}], "isError": is_error}
 
 
-async def handle(line: str) -> None:
+async def handle(line: str):
     """读一行 → 分发 → 写响应。三种结局:回 result / 回 error / 通知静默。"""
+
     msg = json.loads(line)
     if not isinstance(msg, dict):
         return
     req = cast(Incoming, msg)
+    print(f"server handle msg = {msg}", file=sys.stderr)
+
 
     request_id = req.get("id")
     if request_id is None:
