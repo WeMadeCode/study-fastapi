@@ -81,6 +81,41 @@ async def run_agent(messages: list[ChatCompletionMessageParam]):
     raise RuntimeError(f"Agent 达到最大轮数 {MAX_ROUNDS} 仍未收敛")
 
 
+async def run_agent_stream(messages: list[ChatCompletionMessageParam], new_stored: list[MessageDict]):
+    for _ in range(1, MAX_ROUNDS + 1):
+        tool_params = cast(list[ChatCompletionToolParam], get_all_tool_schemas())
+
+        text_parts: list[str] = []
+        pending: list[StoredToolCall] | None = None
+
+        async for event in llm_client.stream_chat_with_tools(messages, tool_params):
+            if event["type"] == "text":
+                text_parts.append(event["text"])
+                yield event
+            else:
+                pending = event["tool_calls"]
+
+        if pending is None:
+            new_stored.append(
+                {"role": "assistant", "content": "".join(text_parts), "tool_call_id": None, "tool_calls": None}
+            )
+            return
+        full_text = "".join(text_parts) or None
+        messages.append(
+            cast(ChatCompletionMessageParam, {"role": "assistant", "content": "full_text", "tool_calls": pending})
+        )
+        new_stored.append({"role": "assistant", "content": full_text, "tool_call_id": None, "tool_calls": pending})
+
+        for tc in pending:
+            name = tc["function"]["name"]
+            yield {"type": "tool_call", "name": name}  # 前端显示"正在调用工具"
+            result = await execute_tool(name, tc["function"]["arguments"])
+            yield {"type": "tool_result", "name": name, "result": result}
+            messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+            new_stored.append({"role": "tool", "content": result, "tool_call_id": tc["id"], "tool_calls": None})
+    raise RuntimeError(f"Agent 达到最大轮数 {MAX_ROUNDS} 仍未收敛")
+
+
 def build_llm_messages(history: list[MessageDict]) -> list[ChatCompletionMessageParam]:
     """存储格式 → SDK 消息。user/assistant/tool 三种角色逐条还原。"""
     llm_messages: list[ChatCompletionMessageParam] = []
@@ -109,3 +144,12 @@ def build_llm_messages(history: list[MessageDict]) -> list[ChatCompletionMessage
             llm_messages.append({"role": "assistant", "content": m["content"]})
 
     return llm_messages
+
+
+def trim_history(history: list[MessageDict], max_messages: int = 40):
+    if len(history) <= max_messages:
+        return history
+    cut = len(history) - max_messages
+    while cut < len(history) and history[cut]["role"] != "user":
+        cut += 1
+    return history[cut:]
