@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C3 · 阶段 3 结业盘点 — study-fastapi</title>
+<style>
+  :root {
+    --ink: #1f2430; --muted: #5b6472; --line: #e3e7ee; --bg: #ffffff;
+    --soft: #f6f8fb; --code-bg: #14181f; --code-ink: #e6edf3;
+    --accent: #0b6bcb; --ok: #2e9e57; --ok-bg: #eefaf0;
+    --warn-bg: #fff8e8; --think-bg: #f2f0ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.75 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header.hero { padding: 48px 24px 32px; background: linear-gradient(180deg, var(--soft), var(--bg));
+    border-bottom: 1px solid var(--line); }
+  .hero .kicker { color: var(--accent); font-weight: 600; letter-spacing: .08em; }
+  .hero h1 { margin: 8px 0 6px; font-size: 30px; }
+  .hero p { margin: 0; color: var(--muted); max-width: 860px; }
+  main { max-width: 900px; margin: 0 auto; padding: 8px 24px 80px; }
+  section { margin-top: 44px; }
+  h2 { font-size: 21px; padding-bottom: 8px; margin: 0 0 14px; border-bottom: 2px solid var(--line); }
+  h2 .no { color: var(--accent); margin-right: 8px; font-family: ui-monospace, monospace; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  .muted { color: var(--muted); }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 14px 16px; border-radius: 10px;
+    overflow-x: auto; font: 13.5px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  code.inline { background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 6px; font: 90% ui-monospace, Menlo, monospace; color: #b3541e; }
+  pre .c { color: #7d8794; } pre .k { color: #ff9b57; font-weight: 600; } pre .s { color: #9ece6a; }
+  .box { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .box.ok { background: var(--ok-bg); border-left-color: var(--ok); }
+  .box.warn { background: var(--warn-bg); border-left-color: #d9a400; }
+  .box.think { background: var(--think-bg); border-left-color: #6f5bd6; }
+  .box b.t { display: block; margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 15px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  footer { border-top: 1px solid var(--line); color: var(--muted); text-align: center; padding: 24px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="kicker">阶段 3 生产化 · C3</div>
+  <h1>阶段 3 结业盘点</h1>
+  <p>生产化课题的最后一课：先在容器化部署上跑一套<b>全链路终验</b>，再沉淀——
+     CLAUDE.md 结业更新、阶段 3 灵魂知识点汇总、遗留清单逐项拍板。验完这篇，阶段 3 正式结业。</p>
+</header>
+
+<main>
+
+<!-- ============ 01 ============ -->
+<section>
+  <h2><span class="no">01</span>本课目标</h2>
+  <ul>
+    <li><b>终验</b>：一套覆盖全栈的结业验收清单——不只有接口冒烟，还有并发互斥、重启持久化、状态清理检查</li>
+    <li><b>沉淀</b>：CLAUDE.md 结业更新（<b>Agent 执笔</b>，按「CLAUDE.md 由 Agent 自动维护」的约定，你过目验收）；灵魂知识点收进自己的笔记</li>
+    <li><b>拍板</b>：遗留清单逐项决策（pytest / JWT / /stream 去留 / news CRUD）——阶段 4 首课已定为 L8 长期记忆</li>
+  </ul>
+</section>
+
+<!-- ============ 02 ============ -->
+<section>
+  <h2><span class="no">02</span>背景回顾：阶段 3 知识地图</h2>
+  <p>盘点之前先把阶段 3 的结论收拢——每一行都是后续终验要压测的对象：</p>
+  <table>
+    <tr><th>课题</th><th>核心结论</th></tr>
+    <tr><td>A1 · /stream 落库</td><td>assistant 回复在流收敛后一次写入；事务边界 = 语义单元（一条完整回复一个事务）</td></tr>
+    <tr><td>A2 · /agent/stream 流式化</td><td>SDK tool_calls 碎片按 index 累积拼接；工具轮判定靠「攒没攒到申请单」不用 finish_reason；StoredToolCall ≡ SDK param ≡ 事件载荷，三形合一</td></tr>
+    <tr><td>B1 · trim_history</td><td>滑动窗口切点必须后移到第一个 user——裁在 tool 轨迹中间会喂出失配申请单，API 400；message_to_dict 桥必须在 trim 之前</td></tr>
+    <tr><td>B2 · 会话互斥</td><td>claim 在响应头发出前（409 抢在流开始前），release 在 generator 的 finally；同会话并发一 200 一 409；全局 _llm_semaphore(8) 控总量</td></tr>
+    <tr><td>连接纪律（贯穿）</td><td>run_agent/stream_chat 等秒级 await 外不得有任何 AsyncSessionLocal 块——连接不陪 LLM 思考</td></tr>
+    <tr><td>C1 · Redis 互斥</td><td>进程内在途表多 worker 必失效（4 张互不相识的表）→ SET NX EX 单命令原子 + TTL 600s 崩溃兜底 + 配对 DEL；互斥状态活在进程之外</td></tr>
+    <tr><td>C2 · Docker 部署</td><td>env_file 提供共性、environment 覆盖拓扑差异；容器网络服务名即主机名；depends_on + service_healthy 是就绪顺序声明；app 容器 --workers 4，正确性靠 C1</td></tr>
+  </table>
+</section>
+
+<!-- ============ 03 ============ -->
+<section>
+  <h2><span class="no">03</span>结业终验（重头戏，在容器化部署上跑）</h2>
+  <p>前提：<code class="inline">docker compose up -d --build</code>，三容器 healthy（C2 的验证已过）。
+     下面 7 项按顺序跑，每项都有明确的期望观察——<b>任何一项不符合预期都值得停下来查</b>，结业验收的意义就是把这些东西钉死。</p>
+  <table>
+    <tr><th>#</th><th>实验</th><th>期望观察</th></tr>
+    <tr><td>1</td><td><code class="inline">curl http://127.0.0.1:8000/health</code></td><td><code class="inline">{"status":"ok"}</code>——容器拓扑下应用活着</td></tr>
+    <tr><td>2</td><td>Postman 打 <code class="inline">/chat/agent</code>：「北京现在几点」（触发 get_city_time 工具轮）</td><td>200 + reply 里有时间；DB 里该会话出现 user / assistant(tool_calls) / tool / assistant 四条消息——方案 B 全量轨迹在容器里依然成立</td></tr>
+    <tr><td>3</td><td>Postman 打 <code class="inline">/agent/stream</code>：「用知识库讲讲新闻里提到的主题」（触发 search_knowledge_base；若 C2 选择了 MCP 进容器则再加 MCP 工具）</td><td>SSE 逐块输出；轨迹收敛后单事务入库；阈值拦截库外问题照常工作</td></tr>
+    <tr><td>4</td><td>同 conversation_id 并发两个请求（C1 的 curl &amp; 实验）</td><td><b>跨容器</b>依然稳定一 200 一 409——Redis 互斥在容器网络里一锤定音；反复 5 遍无例外</td></tr>
+    <tr><td>5</td><td><code class="inline">docker compose restart app</code> 后，拿第 2 步的 conversation_id 再发一条「我们刚才聊了什么」</td><td>模型能复述之前内容——<b>数据库是对话唯一真相源</b>，app 容器无状态、重启不丢数据</td></tr>
+    <tr><td>6</td><td><code class="inline">docker exec -it study-redis redis-cli -a redis123 keys 'chat:busy:*'</code></td><td>为空——所有请求正常结束后锁无泄漏（TTL 兜底之外的正常路径）</td></tr>
+    <tr><td>7</td><td><code class="inline">uv run ruff check app &amp;&amp; uv run mypy app</code></td><td>全绿——阶段 3 的每一步都没欠静态检查的债</td></tr>
+  </table>
+  <div class="box think">
+    <b class="t">第 5 项为什么值得单列？</b>
+    它验证的是「容器无状态 + 状态外置」这条生产部署的核心原则：app 容器可以随意销毁重建，
+    因为对话状态在 Postgres（消息）、在 Redis（互斥，且是短命 key）。反例是状态放进程内存——
+    C1 之前的 <code class="inline">_busy_conversations</code> 和 B2 之前的无持久化，重启即丢。终验不是走过场，是在验证架构决策。
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section>
+  <h2><span class="no">04</span>结业更新一：CLAUDE.md（Agent 执笔）</h2>
+  <p>按「CLAUDE.md 由 Agent 自动维护」的约定（2026-10-13 拍板），这一项<b>不是你的动手项</b>：
+     终验通过、第 05 节拍板完成后，由 Agent 把结业状态写进项目宪法，你过目验收。更新范围：</p>
+  <ul>
+    <li><b>「当前状态」</b>：阶段 3 标记结业（日期），C1/C2/C3 产物一句话各自入册（redis_client.py、Redis 版 claim/release、compose app 服务 + Dockerfile 微调、终验结论）</li>
+    <li><b>「架构」节</b>：补两条——<code class="inline">database/redis_client.py</code>（跨进程共享状态基础设施，SET NX EX 互斥）；tools.py 的 MCP 聚合注册（register_mcp_tools / get_all_tool_schemas）</li>
+    <li><b>「已知遗留」</b>：按第 05 节的拍板结果改写</li>
+  </ul>
+  <div class="box ok">
+    <b class="t">为什么这一项归 Agent</b>
+    项目宪法记录的是「项目事实」（进展、约定、规范），不是学习练习——写错不伤学习效果，写漏才伤。
+    所以它和课件一样归 Agent 维护；项目源码仍然严格你亲手改。你要练的是<b>审</b>：更新后读一遍，问「这符合现在的项目吗」。
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section>
+  <h2><span class="no">05</span>结业更新二：遗留清单拍板（你拍板，Agent 落笔）</h2>
+  <p>每项都有建议和理由，<b>决定权在你</b>——拍完由 Agent 按结果改写 CLAUDE.md：</p>
+  <table>
+    <tr><th>遗留项</th><th>现状</th><th>建议与理由</th></tr>
+    <tr>
+      <td>pytest</td>
+      <td>暂缓中</td>
+      <td><b>建议：维持暂缓。</b>新路线图（阶段 4~7）以 Agent 核心能力为主线，没给它排课；但阶段 3 攒的测试对象不会跑——claim/release（mock redis）、trim_history（切点边界）、execute_tool（error-as-data），等哪课需要测试护栏时作机动专题穿插。</td>
+    </tr>
+    <tr>
+      <td>JWT 鉴权</td>
+      <td>暂缓中</td>
+      <td><b>建议：维持暂缓，但记一笔账。</b>conversation_id 现在裸奔，任何客户端报个 id 就能读写别人的会话；将来做用户体系时 claim/release 的 key 还要升级成 user 维度（<code class="inline">chat:busy:{user_id}:{conversation_id}</code>）。鉴权属工程护栏，不在 Agent 能力主线上，机动穿插。</td>
+    </tr>
+    <tr>
+      <td>/stream 与 /agent/stream 并存</td>
+      <td>功能重叠</td>
+      <td><b>建议：砍 /stream，只留 /agent/stream</b>（与路线图衔接约定一致）。它覆盖 /stream 的全部能力（流式 + 持久化）还有工具轮，而阶段 4 起的课程全长在 agent 层——养一个不进课程的旧接口只是添维护面。教学价值已沉淀在课件里。</td>
+    </tr>
+    <tr>
+      <td>news 模块 CRUD</td>
+      <td>搁置</td>
+      <td><b>建议：维持搁置。</b>news 内容已作 RAG 素材（EmbeddingChunk.news_id 挂 news 表），CRUD 管理界面等到有真实后台需求再做。</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ============ 06 ============ -->
+<section>
+  <h2><span class="no">06</span>阶段 3 灵魂知识点汇总</h2>
+  <div class="box ok">
+    <b class="t">带走这九条</b>
+    ① 连接纪律：run_agent/stream_chat 等秒级 await 外不得有任何 AsyncSessionLocal 块——连接不陪 LLM 思考。<br>
+    ② 409 必须在响应头发出前抛；流开始后错误只能走流内事件，校验必须在 body 阶段。<br>
+    ③ async def 只是定义不执行——try/finally 必须包住 generator 的执行（放体内）而非定义。<br>
+    ④ 事务边界 = 语义单元：整条 agent 轨迹一个事务（append_messages），单条消息一个事务（append_message）。<br>
+    ⑤ 工具轮判定靠「攒没攒到申请单」，不靠 finish_reason；tool_calls 碎片按 index 拼接。<br>
+    ⑥ trim 切点后移到第一个 user——存储合同（轨迹完整性）约束 UI 层的截断策略。<br>
+    ⑦ 互斥状态活在进程之外；「判断 + 写入」跨进程必须压缩成服务端单命令（SET NX）；NX 互斥 + EX 崩溃自愈 + 配对 DEL。<br>
+    ⑧ 容器化配置分层：env_file 共性 + environment 拓扑差异；服务名即主机名；service_healthy 是就绪顺序声明。<br>
+    ⑨ 容器无状态 + 状态外置（Postgres 持久状态 / Redis 短命状态），app 可随意销毁重建。
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section>
+  <h2><span class="no">07</span>下一步预告</h2>
+  <p>阶段 3 结业即进入<b>阶段 4 · 上下文工程与记忆</b>，第一课 <b>L8 · 长期记忆</b>：
+     memories 表迁移 → 对话后 LLM 结构化提取记忆（JSON → Any 边界收窄入库）→ remember/forget 工具注册 →
+     build_llm_messages 前注入 system；起步全量注入，记忆量大了回接 L6 的 pgvector 改检索式注入。
+     验收标准很直接：<b>开个新会话，agent 记得你的偏好</b>。之后 L9 上下文工程进阶（工具结果裁剪、token 预算、历史摘要）。
+     课件延续目录规范：<code class="inline">doc/L8/</code>。</p>
+</section>
+
+</main>
+
+<footer>
+  study-fastapi · 阶段 3 生产化 · C3 课件 · 2026-10-13
+</footer>
+
+</body>
+</html>

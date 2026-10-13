@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C1 · Redis 分布式互斥 — study-fastapi</title>
+<style>
+  :root {
+    --ink: #1f2430; --muted: #5b6472; --line: #e3e7ee; --bg: #ffffff;
+    --soft: #f6f8fb; --code-bg: #14181f; --code-ink: #e6edf3;
+    --accent: #0b6bcb; --ok: #2e9e57; --ok-bg: #eefaf0;
+    --warn-bg: #fff8e8; --think-bg: #f2f0ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.75 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header.hero { padding: 48px 24px 32px; background: linear-gradient(180deg, var(--soft), var(--bg));
+    border-bottom: 1px solid var(--line); }
+  .hero .kicker { color: var(--accent); font-weight: 600; letter-spacing: .08em; }
+  .hero h1 { margin: 8px 0 6px; font-size: 30px; }
+  .hero p { margin: 0; color: var(--muted); max-width: 860px; }
+  main { max-width: 900px; margin: 0 auto; padding: 8px 24px 80px; }
+  section { margin-top: 44px; }
+  h2 { font-size: 21px; padding-bottom: 8px; margin: 0 0 14px; border-bottom: 2px solid var(--line); }
+  h2 .no { color: var(--accent); margin-right: 8px; font-family: ui-monospace, monospace; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  .muted { color: var(--muted); }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 14px 16px; border-radius: 10px;
+    overflow-x: auto; font: 13.5px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  code.inline { background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 6px; font: 90% ui-monospace, Menlo, monospace; color: #b3541e; }
+  pre .c { color: #7d8794; } pre .k { color: #ff9b57; font-weight: 600; } pre .s { color: #9ece6a; }
+  .box { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .box.ok { background: var(--ok-bg); border-left-color: var(--ok); }
+  .box.warn { background: var(--warn-bg); border-left-color: #d9a400; }
+  .box.think { background: var(--think-bg); border-left-color: #6f5bd6; }
+  .box b.t { display: block; margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 15px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  .steps { counter-reset: step; }
+  .step { margin: 30px 0; }
+  .step > h3::before { counter-increment: step; content: "步骤 " counter(step) " · ";
+    color: var(--accent); font-weight: 700; }
+  footer { border-top: 1px solid var(--line); color: var(--muted); text-align: center; padding: 24px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="kicker">阶段 3 生产化 · C1</div>
+  <h1>Redis 分布式互斥</h1>
+  <p>B2 的会话互斥（claim/release）靠一个进程内的 <code class="inline">set</code>——<code class="inline">--workers 4</code> 一开它就失效。
+     本课把在途表搬进 Redis：<code class="inline">SET NX EX</code> 一条命令拿下「检查 + 占位」的原子性。
+     这也是下一课 Docker 部署的地基：容器内多 worker 的正确性靠它。</p>
+</header>
+
+<main>
+
+<!-- ============ 01 ============ -->
+<section>
+  <h2><span class="no">01</span>本课目标</h2>
+  <ul>
+    <li>理解进程内互斥在多 worker 下<b>为什么必然失效</b>（不是写法问题，是状态位置问题）</li>
+    <li>掌握 Redis 分布式锁三件套：<code class="inline">NX</code>（互斥）+ <code class="inline">EX</code>（崩溃自愈）+ 配对 <code class="inline">DEL</code>（释放）</li>
+    <li>动手：claim/release 换 Redis 实现，六个调用点补 <code class="inline">await</code>，lifespan 收尾连接池</li>
+    <li>验证：多 worker 下同会话并发 409 从「看运气」变「稳定复现」</li>
+  </ul>
+  <div class="box warn">
+    <b class="t">前置条件</b>
+    compose 里已有 redis 服务。确认它在跑：<code class="inline">docker ps | grep redis</code>。
+    没起的话：<code class="inline">docker compose up -d redis</code>。
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section>
+  <h2><span class="no">02</span>背景回顾：进程内方案是怎么失效的</h2>
+  <p>B2 的互斥依赖一个模块级变量：</p>
+  <pre><span class="c"># 进程内在途会话表:同会话同时只允许一个请求在跑</span>
+_busy_conversations: set[int] = set()</pre>
+  <p>单 worker 下它是正确的：asyncio 协作式调度里，「检查 + add」之间没有 <code class="inline">await</code>，事件循环不会切走，天然原子。</p>
+  <p>但 <code class="inline">--workers 4</code> 会把整个应用复制成 4 个<b>独立进程</b>——每个进程 import 一遍模块，就有 4 张互不相识的表：</p>
+  <pre>请求A(会话20) ──┐
+                ├──&gt; worker-1: _busy_conversations = <span class="s">{20}</span>   ← 登记在自己的表里
+                │
+请求B(会话20) ──┐
+                ├──&gt; worker-2: _busy_conversations = <span class="s">{}</span>    ← 看不见 worker-1 的 20!
+                │             检查 20 不在 → 放行 → 两个 agent 交错写轨迹 → 乱序</pre>
+  <p>两个请求落在<b>同一个</b> worker 就会 409，落在<b>不同</b> worker 就都放行——互斥变成了掷骰子。
+     掷骰子式的正确性比确定性 bug 更危险：测试时可能恰好都命中同一 worker 显得「还能用」，上线后轨迹乱序、半截轨迹 400 会不定时回来。</p>
+  <div class="box ok">
+    <b class="t">结论</b>
+    互斥状态必须存在<b>所有进程都能看到的地方</b>。compose 里躺着的 redis 正是干这个的——
+    同一个会话项目的 DB、缓存、互斥表，都应该是「进程之外」的基础设施。
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section>
+  <h2><span class="no">03</span>原理：SET NX EX，一条命令的原子性</h2>
+  <p>Redis 的 <code class="inline">SET</code> 命令带两个修饰参数，一条命令同时表达三件事：</p>
+  <pre>SET chat:busy:20 "1" <span class="k">NX</span> <span class="k">EX</span> 600
+│        │        │   │   └─ 过期时间 600 秒(key 到点自动消失)
+│        │        │   └─ NX = 不存在才设置(key 已存在则失败,返回 nil)
+│        │        └─ value(我们不需要值本身,只是占位)
+│        └─ key = 业务前缀 + 会话 id
+└─ 返回 OK = 拿到锁;返回 nil = 已有人在途 → 409</pre>
+  <h3>为什么一条命令就够，而进程内版要「检查 + add」两步？</h3>
+  <p>原子性的<b>归属</b>变了。进程内两步不出本进程内存，安全靠「之间没有 await」；
+     跨进程后，判断和写入要经过网络到 Redis——如果先 <code class="inline">GET</code> 再 <code class="inline">SET</code>，
+     两个 worker 可能在同一瞬间都 <code class="inline">GET</code> 到「不存在」，然后都 <code class="inline">SET</code> 成功，互斥击穿。</p>
+  <p><code class="inline">SET NX</code> 把「存在性判断 + 写入」压缩成 Redis 服务端的<b>单条命令</b>。
+     Redis 命令处理是单线程串行的，天然原子——竞态被整体外包给了 Redis。</p>
+  <h3>TTL 是崩溃兜底，不是精确的锁计时器</h3>
+  <p>如果持有锁的进程崩了（<code class="inline">kill -9</code>、断电、OOM），<code class="inline">finally</code> 里的 release 永远不会执行，
+     key 会永远留在 Redis 里——那个会话被永久锁死。EX 就是兜底：600 秒后 key 自动消失，服务自愈。</p>
+  <p>取值依据：<b>远大于 agent 最坏执行时长</b>（MAX_ROUNDS=8 轮 LLM + 工具，分钟级封顶），600 秒留足余量。
+     太短（比如 60 秒）会在 agent 还在跑时提前放锁，互斥失效；太长则真崩溃后该会话恢复得慢。</p>
+  <h3>目标时序</h3>
+  <pre>worker-1 的请求A 和 worker-2 的请求B,竞争会话 20:
+
+A: SET chat:busy:20 "1" NX EX 600  →  <span class="k">OK</span>      拿到,开始跑 agent
+B: SET chat:busy:20 "1" NX EX 600  →  <span class="k">nil</span>     已存在 → 409「该会话正在处理中」
+...A 跑完 agent,写轨迹...
+A: DEL chat:busy:20                →  <span class="k">OK</span>      release
+B': SET chat:busy:20 "1" NX EX 600 →  <span class="k">OK</span>      下一轮请求正常进来</pre>
+</section>
+
+<!-- ============ 04 ============ -->
+<section>
+  <h2><span class="no">04</span>动手实现（6 步）</h2>
+
+  <div class="step">
+    <h3>安装依赖</h3>
+    <pre>uv add redis</pre>
+    <p class="muted">redis-py 从 4.2 起内置 asyncio 支持（<code class="inline">redis.asyncio</code>），不需要额外的异步包。</p>
+  </div>
+
+  <div class="step">
+    <h3>配置：Settings + .env</h3>
+    <p><code class="inline">app/config/config.py</code> 的 Settings 加字段：</p>
+    <pre><span class="c"># Settings 类里</span>
+redis_url: str = <span class="s">""</span></pre>
+    <p><code class="inline">.env</code> 配真实地址（带密码，密码来自 compose 的 redis 服务）：</p>
+    <pre>REDIS_URL=redis://:redis123@localhost:6379/0</pre>
+    <div class="box ok">
+      <b class="t">点评：「空默认 + .env 必配」是合理选择</b>
+      默认值给空串而不是 <code class="inline">redis://localhost:6379/0</code>，和项目里 <code class="inline">DATABASE_URL</code> 同一个哲学：
+      <b>必填项不提供能跑通的假默认</b>——<code class="inline">from_url("")</code> 会直接抛错，.env 漏配在启动第一秒就暴露，而不是运行到互斥时才奇怪。
+      真实 URL 语法复习：<code class="inline">redis://:密码@主机:端口/库号</code>，冒号前留空 = 无用户名只有密码。
+    </div>
+    <div class="box warn">
+      <b class="t">别忘了模板</b>
+      <code class="inline">.env.example</code> 是仓库里的配置模板，要同步加 <code class="inline">REDIS_URL=</code>（值写占位即可），别人 clone 下来才知道需要配什么。
+    </div>
+  </div>
+
+  <div class="step">
+    <h3>基础设施层：app/database/redis_client.py</h3>
+    <p>落地文件全文（与仓库一致）：</p>
+    <pre><span class="k">import</span> redis.asyncio <span class="k">as</span> Redis
+
+<span class="k">from</span> app.config.config <span class="k">import</span> settings
+
+redis_client = Redis.from_url(
+    settings.redis_url,
+    decode_responses=<span class="k">True</span>,
+)
+
+
+<span class="k">async def</span> get_redis():
+    <span class="k">return</span> redis_client</pre>
+    <p>结构完全正确：模块级单例 + <code class="inline">from_url</code> 惰性连接（import 时不握手，第一条命令才连，无需 lifespan 启动项）+
+       <code class="inline">decode_responses=True</code>（返回 <code class="inline">str</code> 而不是 <code class="inline">bytes</code>，我们存取的都是简单字符串）。位置也对：<code class="inline">database/</code> 归管所有外部连接。两个风格点评：</p>
+    <ul>
+      <li><b>别名 <code class="inline">as Redis</code> 大写</b>：PEP8 里大写驼峰留给<b>类</b>，模块别名惯例小写。容易混淆的点：<code class="inline">redis.asyncio</code> 包里恰好有个 <code class="inline">Redis</code> <i>类</i>——<code class="inline">from redis.asyncio import Redis</code> 然后 <code class="inline">Redis.from_url(...)</code> 是官方常见写法（此时 Redis 就是类）。你现在是「模块别名成了大写」，能用，但建议改成 <code class="inline">from redis.asyncio import Redis</code> 的类导入，或别名小写，二选一。</li>
+      <li><b><code class="inline">get_redis()</code> 目前无人调用</b>：路由是直接 <code class="inline">from app.database.redis_client import redis_client</code> 拿单例的。它要么删掉（不留死代码），要么明确它作为 FastAPI <code class="inline">Depends</code> 注入入口的定位——单文件单例场景直接 import 更直白，教学版建议删。</li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <h3>claim / release 换 Redis 实现</h3>
+    <p><code class="inline">chats.py</code> 顶部的 import 与常量见前两步，本步把两个函数换成 Redis 实现，并删除整个 <code class="inline">_busy_conversations</code>：</p>
+    <pre><span class="k">from</span> app.database.redis_client <span class="k">import</span> redis_client
+
+<span class="c"># 锁 key 模板:业务前缀 chat: + 语义 busy: + 会话 id。</span>
+<span class="c"># 前缀分级是为了 keys/排查时一眼看出归属;TTL 是崩溃兜底,取远大于 agent 最坏执行时长</span>
+_BUSY_KEY = <span class="s">"chat:busy:{conversation_id}"</span>
+_BUSY_TTL_SECONDS = 600
+
+
+<span class="k">async def</span> claim_conversation(conversation_id: int):
+    <span class="c">"""登记在途,重复则 409。SET NX EX 单命令原子,跨 worker 共享。
+
+    原「检查+add 无 await 无需锁」的论证随实现一起作废——现在有 await 了,
+    但原子性整体外包给 Redis 的单命令,比进程内方案更强而不是更弱。
+    TTL 是崩溃兜底:进程挂了没人 DEL,600 秒后 key 自动消失,服务自愈。
+    """</span>
+    ok = <span class="k">await</span> redis_client.set(
+        _BUSY_KEY.format(conversation_id=conversation_id),
+        <span class="s">"1"</span>,
+        nx=<span class="k">True</span>,
+        ex=_BUSY_TTL_SECONDS,
+    )
+    <span class="k">if not</span> ok:
+        <span class="k">raise</span> HTTPException(status_code=409, detail=<span class="s">"该会话正在处理中,请等上一轮完成"</span>)
+
+
+<span class="k">async def</span> release_conversation(conversation_id: int):
+    <span class="c">"""解除在途登记,与 claim 配对使用。"""</span>
+    <span class="k">await</span> redis_client.delete(_BUSY_KEY.format(conversation_id=conversation_id))</pre>
+    <div class="box warn">
+      <b class="t">删干净</b>
+      <code class="inline">_busy_conversations: set[int] = set()</code> 和它的注释一起删——留着会让人误以为进程内表还在参与工作。
+      旧版「检查 + add + discard」的全部逻辑都被上面两个函数取代。
+    </div>
+    <div class="box warn">
+      <b class="t">两个函数都变成了 async</b>
+      所有调用点必须加 <code class="inline">await</code>（下一步）。漏加的话 Python 只会拿到一个 coroutine 对象、什么都不执行，<b>互斥静默失效</b>——
+      和 B2 时 try/finally 包错对象是同一种危险：不报错，但逻辑没跑。
+    </div>
+  </div>
+
+  <div class="step">
+    <h3>调用点加 await（三处 claim + 三处 release）</h3>
+    <p>三个接口的接入位置<b>不变</b>（claim 在响应头发出前，release 在 finally 里——B2 验收过的结构原样保留），只是都变成 await：</p>
+    <pre><span class="c"># 三个接口的 handler 里(body 阶段拿到 conversation_id 之后):</span>
+<span class="k">await</span> claim_conversation(conversation_id)
+
+<span class="c"># /agent 的 try/finally 与两个流式接口 generator 的 finally:</span>
+<span class="k">finally</span>:
+    <span class="k">await</span> release_conversation(conversation_id)</pre>
+    <p class="muted">generator 的 finally 里 await 没问题：aclose 触发 GeneratorExit 时，finally 依然是异步上下文，Redis 调用照常执行。</p>
+  </div>
+
+  <div class="step">
+    <h3>lifespan 收尾：关掉 Redis 连接池</h3>
+    <pre><span class="c"># app/main.py — lifespan 的关闭段(yield 之后),mcp_client.stop() 旁边:</span>
+<span class="k">await</span> mcp_client.stop()
+<span class="k">await</span> redis_client.aclose()   <span class="c"># 归还并关闭连接池,干净退出</span></pre>
+    <pre><span class="c"># main.py 顶部 import 区</span>
+<span class="k">from</span> app.database.redis_client <span class="k">import</span> redis_client</pre>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section>
+  <h2><span class="no">05</span>思考题（做完自问，想通才算懂）</h2>
+
+  <div class="box think">
+    <b class="t">Q1 · 为什么 SET NX EX 一条命令就行，进程内版却要「检查 + add」两步？</b>
+    原子性的归属不同。进程内两步都在本进程内存里，安全靠「之间没有 await，协作式调度不切走」。
+    跨进程后判断和写入要过网络，两步之间任何进程都可能插入，竞态重新出现。
+    SET NX 把「存在性判断 + 写入」压进 Redis 服务端单命令，原子性由 Redis 单线程串行模型保证。
+  </div>
+
+  <div class="box think">
+    <b class="t">Q2 · TTL 为什么 600 秒而不是 60 秒？</b>
+    TTL 是崩溃兜底，不是精确的锁计时器。TTL &lt; 正常执行时长时，agent 还在跑锁就过期了，
+    第二个请求进来，互斥失效。取值 = 远大于 MAX_ROUNDS 最坏执行时长。
+    权衡的另一头：TTL 越长，真崩溃后该会话恢复越慢（要等 key 过期）。
+    600 秒表达的是「误释放的风险 ≪ 恢复延迟」这个取舍。
+  </div>
+
+  <div class="box think">
+    <b class="t">Q3 · release 直接 DEL 有什么理论缺陷？</b>
+    可能误删<b>别人</b>的锁。时序：A 持锁 → A 卡顿超过 TTL → 锁自动过期 → B 拿到新锁 →
+    A 恢复过来执行 DEL → 把 B 的锁删了 → C 也能进来，三方互斥崩塌。
+    严格解法：SET 时 value 存自己的随机 UUID，DEL 前用 Lua 脚本原子比对「是自己的才删」。
+    本项目 release 与 claim 严格配对、执行时长 ≪ TTL，风险可忽略——教学版从简，知道缺陷在哪即可。
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section>
+  <h2><span class="no">06</span>验证</h2>
+  <pre><span class="c"># ① 静态检查先绿</span>
+uv run ruff check app &amp;&amp; uv run mypy app
+
+<span class="c"># ② 多 worker 启动(重点看两件事)</span>
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4</pre>
+  <h3>观察点 1 · 启动日志</h3>
+  <p><code class="inline">[mcp:kb] 握手完成</code> 出现 <b>4 次</b>——lifespan 每个 worker 各跑一遍，
+     4 个进程各自 spawn 一个 MCP 子进程。这是 stdio 拓扑在多进程下的固有代价，看一眼有个概念即可。</p>
+  <h3>观察点 2 · 并发 409 稳定复现</h3>
+  <p>用同一个 conversation_id 并发打两个请求，<b>反复跑 5 遍</b>，记下每遍的结果：</p>
+  <pre>curl -X POST http://127.0.0.1:8000/chat/agent -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"message": "详细讲讲向量检索的原理", "conversation_id": 20}'</span> &amp;
+curl -X POST http://127.0.0.1:8000/chat/agent -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"message": "换个话题", "conversation_id": 20}'</span>
+wait</pre>
+  <p><b>期望：5 遍全部稳定地一 200 一 409</b>——「看运气」消失了，这就是 Redis 在起作用的直接证据。</p>
+  <h3>观察点 3 · 亲眼看 key（可选）</h3>
+  <p>请求进行中另开终端，观察 Redis 里的在途键（redis 设了密码，<code class="inline">-a</code> 传入）：</p>
+  <pre>docker exec -it study-redis redis-cli <span class="k">-a</span> redis123 keys <span class="s">'chat:busy:*'</span>
+<span class="c"># agent 执行期间能看到 "chat:busy:20";跑完后 DEL 掉,keys 为空</span></pre>
+</section>
+
+<!-- ============ 07 ============ -->
+<section>
+  <h2><span class="no">07</span>对比小结</h2>
+  <table>
+    <tr><th>维度</th><th>进程内 set（B2）</th><th>Redis SET NX（本课）</th></tr>
+    <tr><td>状态可见范围</td><td>单进程</td><td>所有 worker / 所有容器</td></tr>
+    <tr><td>原子性来源</td><td>协作式调度（检查+add 之间无 await）</td><td>Redis 服务端单命令</td></tr>
+    <tr><td>进程崩溃后</td><td>状态随进程消失（单进程下等于自愈）</td><td>TTL 兜底自动过期</td></tr>
+    <tr><td>多 worker / 多实例 / 容器编排</td><td class="muted">失效（本课动机）</td><td>依然正确</td></tr>
+    <tr><td>新增风险</td><td>无</td><td>引入 Redis 可用性依赖：Redis 挂 → 互斥失效，需评估降级策略（进阶话题，暂不做）</td></tr>
+  </table>
+  <div class="box ok">
+    <b class="t">本课灵魂知识点</b>
+    ① 互斥状态要活在「进程之外」——凡是多 worker/多实例都要一致的东西，不能放进程内存。<br>
+    ② 「判断 + 写入」跨进程时必须压缩成服务端单命令（SET NX），否则竞态重现；分布式锁三件套 = NX（互斥）+ EX（崩溃自愈）+ release 配对。<br>
+    ③ async 化的函数，所有调用点必须跟上 await——漏了不报错，只是静默不执行。
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section>
+  <h2><span class="no">08</span>下一步预告</h2>
+  <p>下一课 <b>C2 · Docker 部署</b>：解开 compose 里注释的 app 服务，一套 <code class="inline">docker compose up</code> 起全栈。
+     本课的成果正是它的前提——app 容器将以 <code class="inline">--workers 4</code> 跑，Redis 互斥保证多 worker 正确性；
+     配置注入（env_file + environment）、容器网络服务名 DNS、healthcheck 启动顺序，都在下一课。</p>
+</section>
+
+</main>
+
+<footer>
+  study-fastapi · 阶段 3 生产化 · C1 课件 · 2026-10-13
+</footer>
+
+</body>
+</html>

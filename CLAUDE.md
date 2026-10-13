@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目性质: 教学项目,不要替用户写代码
 
-这是用户系统性学习 FastAPI 的项目。**最重要的规则:绝不写/改/删项目源码文件**，即使是在帮用户修报错时,也只诊断、讲解、给代码片段,所有操作由用户亲手完成(用户明确说过「我在学习不要帮我做」)。
+这是用户系统性学习 **Agent 开发** 的教学项目(2026-10-13 重新拍板:总目标是深入掌握 Agent 开发,FastAPI 聊天后端只是贯穿全程的练习载体,完整路线见下方「学习路线图」)。**最重要的规则:绝不写/改/删项目源码文件**，即使是在帮用户修报错时,也只诊断、讲解、给代码片段,所有操作由用户亲手完成(用户明确说过「我在学习不要帮我做」)。
+
+**例外(Agent 可直接写,用户拍板 2026-10-13)**:`CLAUDE.md` 本身由 Agent 自动维护更新——项目进展、新约定、新规范随时同步进此文件,无需逐次向用户确认;`doc/` 课件见下方「课件规范」。除此之外的项目源码(app/scripts/配置等)仍然严格由用户亲手改。
 
 - 全程中文交流。讲解与操作分离:小段代码 + 重点讲解 + 验证命令 + 下一步预告。
 - 报错分析:带用户读 traceback(从下往上、只看自己文件的帧),让用户自己改。
@@ -12,6 +14,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 注意项目架构规范、代码规范，需要按照官方标准。
 - 重点注意 Python 的类型安全问题(详见下方「类型规范」节)。
 
+
+## 课件规范(2026-10-13 起,用户拍板)
+
+**关键教程(每课/阶段课题)由 Agent 写成 HTML 课件存 `doc/` 目录**——这是用户明确授权 Agent 直接写的产物,不属于上面「不写源码」的约束范围;**项目源码(app/scripts/配置等)仍然严格由用户亲手改**,课件里的代码只是教学内容示例,不构成改源码的授权。
+
+- 命名:**一个课一个目录**:`doc/{课号}/{课号}_{主题}.html`(如 `doc/C1/c1_redis_mutex.html`);后续课程延续 L 序列编号(如 `doc/L8/l8_pytest.html`)。**拆分粒度按课,一课一份课件**——跨课依赖用篇内背景回顾解决,不合并多课为一份课件(用户 2026-10-13 拍板:曾试过把 C1~C3 合成一份,最终定回按课拆分)。
+- 内容结构:本课目标 → 背景回顾 → 原理 → 动手实现(分步,代码块完整可抄、注释详细清晰)→ 思考题(含详解)→ 验证实验 → 对比小结 → 进阶预告。
+- **单课完整性(重点)**:一篇课件要能脱离对话上下文独立学习——涉及前课结论时在课件内做背景回顾;所有代码改动在单篇内闭环(不出现「见聊天记录」);验证实验与观察点写全。
+- **结合实际代码(重点)**:写课件前先读项目相关代码,保证课件示例与项目实际对齐(命名、结构、既有约定,不凭空发明);对实际代码的点评(风格、手滑、设计取舍)直接融入讲解。不做进度标注/进度看板类元素——课件是教学内容,不是状态追踪。
+- 技术约束:纯 HTML + 内嵌 CSS,无外部 CDN 依赖,离线可看;全中文。
+
+## 学习路线图(2026-10-13 重新规划,用户拍板)
+
+**总目标:深入掌握 Agent 开发**。聊天后端是贯穿全程的练习载体,不是终点;课题取舍以 Agent 核心能力为准——**上下文工程、规划、编排、评测、安全**。灵魂知识点的沉淀比「功能做完」重要。原则:裸写优先(不引入 LangChain/LangGraph 等框架,延续到全部后续课);一课一份课件(见「课件规范」);每课沉淀灵魂知识点进本文件。
+
+### 已完成基座
+
+- **阶段 1 对话核心(L1~L3)**:模型 API 调用、SSE 流式、会话持久化
+- **阶段 2 Agent 能力(L4~L7)**:function calling、agentic loop、RAG(pgvector)、MCP(裸写 stdio client/server → 正式化 McpClient)
+- **阶段 3 生产化(A1/A2/B1/B2 ✅,C1~C3 收尾进行中)**:/agent/stream 流式化(事件合同)、trim 滑动窗口、会话互斥 + 全局信号量、Redis 分布式互斥(C1)→ Docker 部署(C2)→ 结业盘点(C3)
+
+### 阶段 4 — 上下文工程与记忆(L8~L9):Agent 的记忆与注意力管理
+
+- **L8 长期记忆**:memories 表迁移 → 对话后 LLM 结构化提取记忆(JSON → Any 边界收窄入库)→ remember/forget 工具注册 → build_llm_messages 前注入 system;起步全量注入,记忆量大了回接 L6 pgvector 改检索式注入;验收 = 跨会话记得用户偏好
+- **L9 上下文工程进阶**:工具结果裁剪(大结果截断/落盘引用)、token 预算、历史摘要压缩(远期摘要 + 近期原文分层);定位 = B1 被动 trim 的主动优化版
+
+### 阶段 5 — 规划与编排(L10~L12):从单体 agent 到 agent 系统
+
+- **L10 规划与反思**:plan-and-execute(先出计划 JSON → 逐步执行 → 对照计划修正/重排)+ reflection 执行后自评;解决「多步任务走偏」问题
+- **L11 子 agent 编排**:spawn_subagent 工具(独立 messages 起精简 run_agent,只带结论回主上下文 = 上下文隔离)、递归深度/预算限制
+- **L12 并行编排与长任务(机动)**:asyncio fan-out/fan-in 多子 agent(呼应全局 _llm_semaphore)、后台任务与进度流、工具执行前审批(human-in-the-loop)
+
+### 阶段 6 — 评测与可观测(L13~L14):能测量才能掌握
+
+- **L13 可观测性**:分层 tracing(agent/llm/tool 各一层)、token 用量与成本统计、结构化轨迹导出
+- **L14 评测**:固定评测集(问题 + 期望行为)、LLM-as-judge 打分脚本、回归跑分(改 prompt/换模型前后对比,防越改越差)
+
+### 阶段 7 — 安全与结业(L15~L16)
+
+- **L15 Agent 安全**:prompt injection 攻防实验(在 RAG/工具结果里埋注入打自家 agent)、工具最小权限、输出护栏
+- **L16 结业 capstone**:综合运用记忆 + 规划 + 子 agent + 评测做一个完整场景(如个人知识助手),作为全路线验收
+
+机动专题(不排课,用到再穿插):结构化输出强化、模型分级路由降本、多模态输入、MCP 传输进阶(Streamable HTTP/鉴权)。
+
+**衔接约定**:阶段 4 前置 = C3 结业盘点收完;C3 拍板 /stream 去留时建议砍 /stream 只留 /agent/stream,后续课程全长在 agent 层。此前拍板的「L8 三小节合并 / L9 评测」方向已重新规划为逐课拆分 L8~L16(课件按「课件规范」一个课一个目录 `doc/L{n}/`)。
 
 ## 架构
 
@@ -37,10 +84,11 @@ app 布局 + uv,Python 3.13。请求链路:`main.py` 注册 routers → routers/
 - **TypedDict = 形状合同**:StoredToolCall / MessageDict / JsonRpcRequest 同款;同一形状的可选键用 `NotRequired` 表达;`total=False` 的键取值用 `.get()`,不裸下标;合同变更要同步改全所有使用侧。
 - **cast 的诚实性**:cast 只收窄「写入侧合同能保证」的形状,不是骗过检查器的工具。
 
-## 当前状态(2026-10-09)
+## 当前状态(2026-10-13)
 
-- 2026-09-20 起主线转向 Agent 开发:目标类 GPT/豆包网页版聊天**后端**,教学路线 L1 调模型 API → L2 SSE 流式 → L3 会话持久化 → L4 function calling → L5 agentic loop → L6 RAG → L7 MCP,裸写优先,不引入 LangChain 等框架(阶段 2 结束前);每课产物练习脚本在 scripts/。
-- **L1~L6 已结业(L6 于 2026-10-09 验收)**。现有接口:`POST /chat/stream`(SSE + 会话持久化)、`POST /chat/agent`(agentic loop,MAX_ROUNDS=8,方案 B 全量持久化,轨迹收敛后单事务写入)。L6 产物:pgvector + EmbeddingChunk 表、services/rag/(chunker/retriever)、scripts/l6_ingest(切块→embed→幂等入库)、l6_retrieval(检索 + cosine/l2/inner 三算子对比)、l6_rag(RAG 闭环,阈值拦库外问题);search_knowledge_base 已接入 agentic loop。收尾完成:l6_rag.py 复用 retriever;agent 轨迹改单事务(crud.append_messages)。
-- **L7 MCP 进行中(2026-10-09)**:裸写优先看穿协议。L7.1 最小 MCP client(scripts/l7_mcp_client.py):stdio 子进程 + JSON-RPC 三连(initialize → notifications/initialized 通知 → tools/list → tools/call),连 `uvx mcp-server-time`。规划:L7.2 把 search_knowledge_base 包成自己的 MCP server(消费方→提供方)→ L7.3 动态接入 agentic loop(启动时 tools/list 动态合成工具清单,loop 不改)。L7 之后 = 阶段 3 生产化(上下文管理/限流并发/部署)。
-- 已知遗留(未做):/stream 的 assistant 回复没写库(reply_parts 攒而未存);/agent 流式化;pytest/JWT 暂缓。
-- news 模块 CRUD 接口仍搁置;news 内容已在 L6 用作 RAG 素材(EmbeddingChunk.news_id 挂 news 表)。
+- 2026-09-20 起主线转向 Agent 开发;**总目标已重新拍板(2026-10-13):深入掌握 Agent 开发,类 GPT 聊天后端只是练习载体**,完整路线见上方「学习路线图」;裸写优先,不引入 LangChain/LangGraph 等框架;练习脚本在 scripts/,**课件在 doc/(Agent 写,见「课件规范」)**。
+- **L1~L7 已结业**。接口:`POST /chat/stream`(SSE+持久化,三段式连接管理)、`POST /chat/agent`(非流式 agentic loop)、`POST /agent/stream`(流式 agentic loop)。L7 产物:scripts/l7_mcp_client.py(裸写 JSON-RPC 三连)、l7_mcp_server.py(自家 stdio MCP server)、app/services/mcp/client.py(McpClient,main.py lifespan 驱动,.env 的 MCP_KB_SERVER_CMD 配置);tools.py 经 register_mcp_tools 注入 + get_all_tool_schemas 聚合(MCP 同名覆盖内置),agent loop 取简历走 get_all_tool_schemas()。
+- **阶段 3 进行中**:A1 ✅ /stream assistant 落库(流收敛后 join 写入);A2 ✅ /agent/stream 流式化(llm 层 stream_chat_with_tools 拼接 tool_calls 碎片→TextEvent/ToolCallsEvent 事件合同;agent 层 run_agent_stream 透传 text/消化工具轮;轨迹仍收敛后单事务写;StoredToolCall ≡ SDK param ≡ 事件载荷三形合一);B1 ✅ trim_history 滑动窗口(切点后移到 user,防裁在轨迹中间致 400;message_to_dict 桥必须在 trim 前);B2 ✅ 会话互斥(claim/release,流式接口 claim 在 handler return 前、release 在 generator finally;同会话并发 409 已验证)+全局 _llm_semaphore(8)。
+- **阶段 3 收尾课题进行中(课件:doc/C1/、doc/C2/、doc/C3/)**:C1 代码已完成——claim/release 换 Redis SET NX EX + DEL(_BUSY_KEY / _BUSY_TTL_SECONDS=600),_busy_conversations 已删,6 处调用点全 await,lifespan 补 redis aclose,.env.example 补 REDIS_URL;待做:C1 验证(ruff/mypy → --workers 4 同会话并发 5 遍全稳 409)→ C2 部署 → C3 盘点。
+- **连接纪律(硬约定)**:run_agent/stream_chat 等秒级 await 外不得有任何 AsyncSessionLocal 块——连接只陪 DB 干活,不陪 LLM 思考;409 必须在响应头发出前抛,流开始后错误只能走流内事件;try/finally 必须包住 generator 的执行(放体内)而非定义。
+- 已知遗留:pytest/JWT 暂缓;news 模块 CRUD 搁置(news 内容已作 RAG 素材);/stream 与 /agent/stream 并存待 C3 决定去留。

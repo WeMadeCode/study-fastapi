@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.config.config import settings
+from app.database.redis_client import redis_client
 from app.routers import chats, news, posts, users
 from app.services.mcp.client import mcp_client
 from app.services.tools import register_mcp_tools
@@ -18,6 +19,7 @@ async def lifespan(_: FastAPI):
 
     # ③ 关闭段:收到 Ctrl+C / SIGTERM 后,跑一次
     await mcp_client.stop()  # 杀掉子进程
+    await redis_client.aclose()
 
 
 app = FastAPI(title="Study Fastapi", lifespan=lifespan)

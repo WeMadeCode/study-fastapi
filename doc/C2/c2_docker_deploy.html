@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C2 · Docker 部署收尾 — study-fastapi</title>
+<style>
+  :root {
+    --ink: #1f2430; --muted: #5b6472; --line: #e3e7ee; --bg: #ffffff;
+    --soft: #f6f8fb; --code-bg: #14181f; --code-ink: #e6edf3;
+    --accent: #0b6bcb; --ok: #2e9e57; --ok-bg: #eefaf0;
+    --warn-bg: #fff8e8; --think-bg: #f2f0ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.75 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header.hero { padding: 48px 24px 32px; background: linear-gradient(180deg, var(--soft), var(--bg));
+    border-bottom: 1px solid var(--line); }
+  .hero .kicker { color: var(--accent); font-weight: 600; letter-spacing: .08em; }
+  .hero h1 { margin: 8px 0 6px; font-size: 30px; }
+  .hero p { margin: 0; color: var(--muted); max-width: 860px; }
+  main { max-width: 900px; margin: 0 auto; padding: 8px 24px 80px; }
+  section { margin-top: 44px; }
+  h2 { font-size: 21px; padding-bottom: 8px; margin: 0 0 14px; border-bottom: 2px solid var(--line); }
+  h2 .no { color: var(--accent); margin-right: 8px; font-family: ui-monospace, monospace; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  .muted { color: var(--muted); }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 14px 16px; border-radius: 10px;
+    overflow-x: auto; font: 13.5px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  code.inline { background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 6px; font: 90% ui-monospace, Menlo, monospace; color: #b3541e; }
+  pre .c { color: #7d8794; } pre .k { color: #ff9b57; font-weight: 600; } pre .s { color: #9ece6a; }
+  .box { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .box.ok { background: var(--ok-bg); border-left-color: var(--ok); }
+  .box.warn { background: var(--warn-bg); border-left-color: #d9a400; }
+  .box.think { background: var(--think-bg); border-left-color: #6f5bd6; }
+  .box b.t { display: block; margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 15px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  .steps { counter-reset: step; }
+  .step { margin: 30px 0; }
+  .step > h3::before { counter-increment: step; content: "步骤 " counter(step) " · ";
+    color: var(--accent); font-weight: 700; }
+  footer { border-top: 1px solid var(--line); color: var(--muted); text-align: center; padding: 24px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="kicker">阶段 3 生产化 · C2</div>
+  <h1>Docker 部署收尾：app 进容器，compose 一键全栈</h1>
+  <p>现状是「半编排」：db 和 redis 在 compose 里，app 本地 <code class="inline">uv run</code> 直跑。
+     本课解开 compose 里注释的 app 服务——配置注入（env_file + environment 覆盖）、容器网络主机名、
+     Dockerfile 微调，最后一套 <code class="inline">docker compose up</code> 起全栈。</p>
+</header>
+
+<main>
+
+<!-- ============ 01 ============ -->
+<section>
+  <h2><span class="no">01</span>本课目标</h2>
+  <ul>
+    <li>掌握容器化配置注入的分层：<code class="inline">env_file</code> 提供共性，<code class="inline">environment</code> 覆盖拓扑差异</li>
+    <li>理解容器网络：服务名即主机名，<code class="inline">localhost</code> 在容器里指容器自己</li>
+    <li>理解 <code class="inline">depends_on + condition: service_healthy</code>：把「启动顺序」升级为「就绪顺序」</li>
+    <li>动手：compose 解开 app 服务 + Dockerfile 微调，三容器全栈跑通</li>
+  </ul>
+  <div class="box warn">
+    <b class="t">前置条件</b>
+    C1 的 Redis 互斥已落地（本课 app 容器会以 <code class="inline">--workers 4</code> 跑，
+    多 worker 正确性靠 Redis <code class="inline">SET NX EX</code>——若还停在进程内 set，容器里互斥等于掷骰子）。
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section>
+  <h2><span class="no">02</span>背景回顾：现状与资产盘点</h2>
+  <h3>前课地基（一句话）</h3>
+  <p>C1 已把会话互斥从进程内 set 换成 Redis <code class="inline">SET NX EX</code>
+     （key = <code class="inline">chat:busy:{conversation_id}</code>，TTL 600 秒，release 配对 <code class="inline">DEL</code>）——
+     互斥状态活在「进程之外」，所有 worker / 所有容器共享同一份。</p>
+  <h3>现有资产盘点（与仓库一致）</h3>
+  <p><b>Dockerfile 已有</b>（Docker 线产物），结构是标准的两段式：</p>
+  <pre>FROM python:3.13-slim            <span class="c"># 精简版 Debian 基座</span>
+WORKDIR /app
+COPY pyproject.toml uv.lock ./   <span class="c"># 先只拷依赖声明 —— 利用层缓存:代码改动不重装依赖</span>
+RUN pip install uv &amp;&amp; uv sync --frozen --no-dev --no-install-project
+COPY app ./app                   <span class="c"># 这时候才拷代码</span>
+COPY README.md ./
+RUN uv sync --frozen --no-dev
+EXPOSE 8000
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]</pre>
+  <p><b>compose 现状</b>：db（pgvector，healthcheck 齐全）+ redis（带 <code class="inline">--requirepass</code>，healthcheck 齐全），
+     app 服务整段被注释。解开它有四个问题要解决：</p>
+  <table>
+    <tr><th>#</th><th>问题</th><th>解法</th></tr>
+    <tr><td>1</td><td>.env 不进镜像也不进仓库，容器里读不到 ARK key 等配置</td><td><code class="inline">env_file</code> 挂 .env + <code class="inline">environment</code> 覆盖差异项（compose 规则：environment 优先级 &gt; env_file）</td></tr>
+    <tr><td>2</td><td>容器网络里 <code class="inline">localhost</code> 指容器自己，连不到 db/redis</td><td>主机名改用<b>服务名</b> <code class="inline">db</code> / <code class="inline">redis</code>（compose 内置 DNS）</td></tr>
+    <tr><td>3</td><td>MCP 子进程（lifespan spawn 的 stdio server）在容器拓扑怎么办</td><td><code class="inline">MCP_KB_SERVER_CMD</code> 置空 → lifespan 的 <code class="inline">if</code> 自动跳过（这正是当初写这个判断的远见）；进阶方案见步骤 3</td></tr>
+    <tr><td>4</td><td>注释版 app 服务自己的坑：<code class="inline">DATABASE_URL</code> 用户名写的是 <code class="inline">study</code>，但 db 服务定义的是 <code class="inline">POSTGRES_USER: postgres</code>——照抄必 500</td><td>解开时修正为 <code class="inline">postgres:study123@db:5432</code></td></tr>
+  </table>
+</section>
+
+<!-- ============ 03 ============ -->
+<section>
+  <h2><span class="no">03</span>关键机制：配置怎么进容器、容器之间怎么找到彼此</h2>
+  <h3>配置注入的三层</h3>
+  <table>
+    <tr><th>层</th><th>内容</th><th>特点</th></tr>
+    <tr><td>镜像内</td><td>代码 + 依赖（<code class="inline">uv sync</code> 装好的 .venv）</td><td>没有 .env——它被 .gitignore 和 .dockerignore 挡在外面，这是对的</td></tr>
+    <tr><td><code class="inline">env_file</code></td><td>宿主机的 .env 整体注入（ARK key 等共性配置）</td><td>文件在宿主机上，<b>不进镜像层、不进 git</b>；compose 读它，不是 Docker build 读它</td></tr>
+    <tr><td><code class="inline">environment</code></td><td>容器拓扑下的差异项（主机名、MCP 开关）</td><td>写在 compose 文件里，<b>优先级高于 env_file</b>——同名的环境变量以它为准</td></tr>
+  </table>
+  <p>这样分层的收益：本地直跑和容器跑用<b>同一份 .env</b>（<code class="inline">localhost</code> 版地址），
+     容器只覆盖「拓扑不同」的三项——配置的共性留在文件，差异留在编排层。</p>
+  <h3>容器网络：服务名即主机名</h3>
+  <p>compose 会为项目建一个独立 bridge 网络，每个服务名注册成 DNS 名。
+     app 容器里 <code class="inline">db</code> 解析到 db 容器 IP、<code class="inline">redis</code> 解析到 redis 容器 IP。
+     而 <code class="inline">localhost</code> 永远指容器自身的回环——这是容器网络最常见的新手坑。</p>
+  <h3>启动顺序 vs 就绪顺序</h3>
+  <p>不带 condition 的 <code class="inline">depends_on</code> 只保证「容器被创建」的顺序——容器启动了不等于服务能用了
+     （Postgres 启动到能接受连接要几秒）。db/redis 的 healthcheck 探活命令已经写好在 compose 里，
+     app 侧用 <code class="inline">condition: service_healthy</code> 引用，compose 会等到健康检查通过才启动 app——
+     这不是装饰，是启动顺序的<b>正确性声明</b>。</p>
+</section>
+
+<!-- ============ 04 ============ -->
+<section>
+  <h2><span class="no">04</span>动手实现（3 步）</h2>
+
+  <div class="step">
+    <h3>compose 解开 app 服务</h3>
+    <p>把注释的 <code class="inline">app:</code> 段替换成（<code class="inline">docker-compose.yml</code>）：</p>
+    <pre>  app:
+    build: .                      <span class="c"># 用根目录 Dockerfile 构建</span>
+    container_name: study-app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env                      <span class="c"># ① 整体注入本地 .env(ARK key 等共性配置)</span>
+    environment:                  <span class="c"># ② 覆盖容器拓扑下的差异项(优先级高于 env_file)</span>
+      DATABASE_URL: postgresql+psycopg://postgres:study123@db:5432/study_fastapi
+      REDIS_URL: redis://:redis123@redis:6379/0
+      MCP_KB_SERVER_CMD: ""
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy</pre>
+    <div class="box ok">
+      <b class="t">要点</b>
+      ① <code class="inline">env_file</code> 提供共性、<code class="inline">environment</code> 覆盖差异——这是 compose 的标准分层，ARK key 这类与拓扑无关的配置留在 .env，与拓扑相关的（主机名）在 environment 里改写。<br>
+      ② <code class="inline">@db:5432</code> / <code class="inline">@redis:6379</code> —— 服务名即主机名；用户名用 <code class="inline">postgres</code>（修正盘点表第 4 项的坑）。<br>
+      ③ <code class="inline">depends_on</code> 两个 healthy：redis 的 healthcheck 在 compose 里已就位，直接引用。
+    </div>
+  </div>
+
+  <div class="step">
+    <h3>Dockerfile 微调</h3>
+    <p>两处改动：</p>
+    <pre><span class="c"># ① 代码拷贝区补上 alembic(迁移要在容器里跑,见步骤 3;不跑迁移可不加)</span>
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./
+COPY README.md ./
+
+<span class="c"># ② CMD 加 --workers 4(与 C1 配合:Redis 互斥已跨进程安全,容器内多 worker 有靠山)</span>
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]</pre>
+    <div class="box think">
+      <b class="t">讨论：容器内多 worker vs 容器单进程</b>
+      生产上更主流的是<b>容器内单进程</b>，横向扩容交给编排层（compose scale / K8s replicas）——一个容器一个进程，崩溃边界清晰。
+      教学版选容器内 <code class="inline">--workers 4</code>：与 C1 的验证实验连续（日志、互斥行为完全一致），且 Redis 互斥保证多 worker 正确性。
+      知道两种形态的取舍即可。
+    </div>
+  </div>
+
+  <div class="step">
+    <h3>可选进阶：容器启动自动迁移 + MCP 进容器</h3>
+    <p><b>自动迁移</b>：<code class="inline">alembic/env.py</code> 通过 <code class="inline">settings.database_url</code> 拿连接串——pydantic-settings 的优先级是<b>环境变量 &gt; .env 文件</b>，
+       所以容器里 environment 注入的 <code class="inline">DATABASE_URL</code> 自动生效，容器内 <code class="inline">alembic upgrade head</code> 直接可跑。把 CMD 改成先迁移后起服务：</p>
+    <pre>CMD ["sh", "-c", "uv run alembic upgrade head &amp;&amp; uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"]</pre>
+    <p class="muted">迁移在 CMD 层跑一次、先于 worker 启动——天然避开「4 个 worker 同时迁移」的竞态。</p>
+    <p><b>MCP 进容器</b>（想让容器版也带知识库工具时）：<code class="inline">scripts/</code> 拷进镜像，cmd 指向自家 server：</p>
+    <pre>COPY scripts ./scripts
+<span class="c"># compose 的 environment 里:</span>
+MCP_KB_SERVER_CMD: "uv run python scripts/l7_mcp_server.py"</pre>
+    <p class="muted">注意 uvx 拉外部包（如 mcp-server-time）需要网络且缓存不持久，容器化优先用自家 stdio server。教学版保持置空也完全成立——内置工具照跑，只是少了 MCP 外接工具。</p>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section>
+  <h2><span class="no">05</span>思考题</h2>
+
+  <div class="box think">
+    <b class="t">Q1 · 为什么用 env_file + environment 覆盖，而不是把所有配置都写进 environment，或都打进镜像？</b>
+    全写 environment：ARK key 明文进 compose 文件，而 compose 文件通常进 git——密钥泄漏。
+    全打进镜像：密钥进了镜像层，任何拿到镜像的人 <code class="inline">docker history</code> / 导出就能翻出来，且改一个配置要重新构建。
+    env_file 方案里 .env 只存在于宿主机，不进 git 也不进镜像；environment 只放「不算秘密的拓扑差异」。
+  </div>
+
+  <div class="box think">
+    <b class="t">Q2 · 容器里 DATABASE_URL 的主机名为什么不能写 localhost 或 127.0.0.1？</b>
+    每个容器的网络栈是隔离的（network namespace），容器里的 localhost 指容器自身的回环——db 根本不在「本机」上。
+    它们靠 compose 的 bridge 网络互联，服务名注册为 DNS 名，所以写 db / redis。
+    本地直跑时 localhost 能通，是因为 db 端口映射到了宿主机——「能通」的原因完全不同。
+  </div>
+
+  <div class="box think">
+    <b class="t">Q3 · depends_on 不加 condition 和加 service_healthy 有什么区别？为什么 app 必须要后者？</b>
+    不加 condition 只保证创建顺序（容器启动 ≠ 服务可用）；Postgres 从启动到能接受连接有几秒窗口，
+    app 启动即连 db/redis，撞上窗口就直接连接失败。
+    service_healthy 复用 healthcheck 的探活结果，把「启动顺序」升级为「就绪顺序」——app 启动时依赖必然已可用。
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section>
+  <h2><span class="no">06</span>验证</h2>
+  <pre><span class="c"># 先停掉本地直跑的 uvicorn(8000 端口不能被占),然后构建并起全栈(首次构建要几分钟)</span>
+docker compose up -d --build
+
+<span class="c"># 看三容器都 healthy、app 启动日志</span>
+docker compose ps
+docker compose logs -f app</pre>
+  <h3>观察点</h3>
+  <ol>
+    <li><b>三容器全部 healthy</b>：<code class="inline">study-pgsql</code> / <code class="inline">study-redis</code> / <code class="inline">study-app</code></li>
+    <li><b>app 日志</b>：uvicorn 起 4 个 worker；<code class="inline">[mcp:kb]</code> 握手日志<b>不出现</b>（MCP 置空跳过的直接证据）；没有 <code class="inline">REDIS_URL</code> 相关报错</li>
+    <li><code class="inline">curl http://127.0.0.1:8000/health</code> → <code class="inline">{"status":"ok"}</code></li>
+    <li><b>并发 409 复测</b>：用 C1 的并发实验（同 conversation_id 两个 curl &amp;）对容器版再打一遍——这次是<b>跨容器</b>的互斥，Redis 在容器网络里依然一锤定音</li>
+    <li><b>Postman 走一遍全链路</b>：/agent/stream 知识库问答（确认 db 迁移过的表都在、pgvector 检索正常）</li>
+  </ol>
+  <div class="box warn">
+    <b class="t">常见坑</b>
+    ① 宿主机 8000 端口被本地 uvicorn 占着 → 容器端口映射失败，先停本地服务再 <code class="inline">up</code>。<br>
+    ② db 用的是既有数据卷，表都在，无需迁移；若是全新卷（换机器/删卷），用步骤 3 的自动迁移 CMD 或宿主机临时指向容器端口跑一次 <code class="inline">alembic upgrade head</code>。
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section>
+  <h2><span class="no">07</span>小结</h2>
+  <table>
+    <tr><th>关注点</th><th>本地直跑（改前）</th><th>compose 全栈（改后）</th></tr>
+    <tr><td>app 进程</td><td>宿主机 uv run，手工起</td><td>study-app 容器，up 即起，--workers 4</td></tr>
+    <tr><td>配置来源</td><td>宿主机 .env（pydantic-settings 读）</td><td>env_file(.env) + environment 覆盖拓扑差异</td></tr>
+    <tr><td>db/redis 地址</td><td>localhost:5432 / localhost:6379</td><td>服务名 db / redis（容器 DNS）</td></tr>
+    <tr><td>启动顺序</td><td>手工保证</td><td>depends_on + service_healthy 声明</td></tr>
+    <tr><td>MCP</td><td>lifespan spawn 自家 server</td><td>MCP_KB_SERVER_CMD 置空跳过（或指向容器内 scripts）</td></tr>
+  </table>
+  <div class="box ok">
+    <b class="t">本课灵魂知识点</b>
+    ① 容器化配置分层：env_file 提供共性（密钥不进 git/镜像），environment 覆盖拓扑差异（优先级更高）。<br>
+    ② 容器网络里服务名即主机名，localhost 永远指容器自己。<br>
+    ③ depends_on + condition: service_healthy 是启动顺序的正确性声明，不是装饰。<br>
+    ④ Dockerfile 两段式（先依赖后代码）吃层缓存红利：改代码不重装依赖。
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section>
+  <h2><span class="no">08</span>下一步预告</h2>
+  <p>下一课 <b>C3 · 阶段 3 结业盘点</b>：在容器化部署上跑一套全链路终验（三接口冒烟 + 跨容器并发 409 + 重启持久化验证），
+     更新 CLAUDE.md、拍板遗留清单（pytest / JWT / /stream 去留），阶段 3 正式结业。</p>
+</section>
+
+</main>
+
+<footer>
+  study-fastapi · 阶段 3 生产化 · C2 课件 · 2026-10-13
+</footer>
+
+</body>
+</html>
