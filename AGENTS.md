@@ -1,12 +1,12 @@
 # AGENTS.md
 
-This file provides guidance to Codex (claude.ai/code) when working with code in this repository.
+本文件是 Codex 和 Claude Code 共用的项目规则。Claude Code 通过 `CLAUDE.md` 导入本文件；项目约定与进度只在这里维护，避免两份规则分叉。
 
 ## 项目性质: 教学项目,不要替用户写代码
 
 这是用户系统性学习 **Agent 开发** 的教学项目(2026-10-13 重新拍板:总目标是深入掌握 Agent 开发,FastAPI 聊天后端只是贯穿全程的练习载体,完整路线见下方「学习路线图」)。**最重要的规则:绝不写/改/删项目源码文件**，即使是在帮用户修报错时,也只诊断、讲解、给代码片段,所有操作由用户亲手完成(用户明确说过「我在学习不要帮我做」)。
 
-**例外(Agent 可直接写,用户拍板 2026-10-13)**:`AGENTS.md` 本身由 Agent 自动维护更新——项目进展、新约定、新规范随时同步进此文件,无需逐次向用户确认;`doc/` 课件见下方「课件规范」。除此之外的项目源码(app/scripts/配置等)仍然严格由用户亲手改。
+**例外(Agent 可直接写,用户拍板 2026-10-13)**:`AGENTS.md` 由 Codex 或 Claude Code 自动维护更新——项目进展、新约定、新规范随时同步进此文件,无需逐次向用户确认;`CLAUDE.md` 只保留导入入口;`doc/` 课件见下方「课件规范」。除此之外的项目源码(app/scripts/配置等)仍然严格由用户亲手改。
 
 - 全程中文交流。讲解与操作分离:小段代码 + 重点讲解 + 验证命令 + 下一步预告。
 - 报错分析:带用户读 traceback(从下往上、只看自己文件的帧),让用户自己改。
@@ -90,6 +90,6 @@ app 布局 + uv,Python 3.13。请求链路:`main.py` 注册 routers → routers/
 - **L1~L7 已结业**。接口:`POST /chat/stream`(SSE+持久化,三段式连接管理)、`POST /chat/agent`(非流式 agentic loop)、`POST /agent/stream`(流式 agentic loop)。L7 产物:scripts/l7_mcp_client.py(裸写 JSON-RPC 三连)、l7_mcp_server.py(自家 stdio MCP server)、app/services/mcp/client.py(McpClient,main.py lifespan 驱动,.env 的 MCP_KB_SERVER_CMD 配置);tools.py 经 register_mcp_tools 注入 + get_all_tool_schemas 聚合(MCP 同名覆盖内置),agent loop 取简历走 get_all_tool_schemas()。
 - **阶段 3 进行中**:A1 ✅ /stream assistant 落库(流收敛后 join 写入);A2 ✅ /agent/stream 流式化(llm 层 stream_chat_with_tools 拼接 tool_calls 碎片→TextEvent/ToolCallsEvent 事件合同;agent 层 run_agent_stream 透传 text/消化工具轮;轨迹仍收敛后单事务写;StoredToolCall ≡ SDK param ≡ 事件载荷三形合一);B1 ✅ trim_history 滑动窗口(切点后移到 user,防裁在轨迹中间致 400;message_to_dict 桥必须在 trim 前);B2 ✅ 会话互斥(claim/release,流式接口 claim 在 handler return 前、release 在 generator finally;同会话并发 409 已验证)+全局 _llm_semaphore(8)。
 - **阶段 3 收尾课题进行中(课件:doc/C1/、doc/C2/、doc/C3/)**:C1 代码已完成——claim/release 换 Redis SET NX EX + DEL(_BUSY_KEY / _BUSY_TTL_SECONDS=600),_busy_conversations 已删,6 处调用点全 await,lifespan 补 redis aclose,.env.example 补 REDIS_URL;待做:C1 验证(ruff/mypy → --workers 4 同会话并发 5 遍全稳 409)→ C2 部署 → C3 盘点。
-- **专题插播课 T1(2026-10-14,Agent 已写课件,用户尚未学,安排在进 L8 之前)**:Agent 生态地图——CLI / MCP / SKILL / Rules / Hook / 子 Agent / 插件 / AGENTS.md 概念对照课,每个概念锚定项目代码(TOOLS_SCHEMA 全量常驻 vs SKILL 渐进披露 → L9 伏笔;AGENTS.md = 人肉长期记忆 → L8 伏笔);动手 = 用户在 `~/.Codex/skills/` 写 py-hand-check skill(含 check_typos.sh 脚本,不碰项目源码)。课件 `doc/T1/t1_agent_ecosystem.html`。事实基线:MCP 现行规范 2026-07-28(无状态核心;用户 client 握手仍是 2025-06-18 stdio 形态,知识不过时),Skills 为开放规范(agentskills.io / anthropics-skills 仓库)。
+- **专题插播课 T1(2026-10-14,Agent 已写课件,用户尚未学,安排在进 L8 之前)**:Agent 生态地图——CLI / MCP / SKILL / Rules / Hook / 子 Agent / 插件 / CLAUDE.md 概念对照课,每个概念锚定项目代码(TOOLS_SCHEMA 全量常驻 vs SKILL 渐进披露 → L9 伏笔;项目规则文件 = 人肉长期记忆 → L8 伏笔);课件以 Claude Code 为例,动手 = 用户在 `~/.claude/skills/` 写 py-hand-check skill(含 check_typos.sh 脚本,不碰项目源码)。课件 `doc/T1/t1_agent_ecosystem.html`。事实基线:MCP 现行规范 2026-07-28(无状态核心;用户 client 握手仍是 2025-06-18 stdio 形态,知识不过时),Skills 为开放规范(agentskills.io / anthropics-skills 仓库)。
 - **连接纪律(硬约定)**:run_agent/stream_chat 等秒级 await 外不得有任何 AsyncSessionLocal 块——连接只陪 DB 干活,不陪 LLM 思考;409 必须在响应头发出前抛,流开始后错误只能走流内事件;try/finally 必须包住 generator 的执行(放体内)而非定义。
 - 已知遗留:pytest/JWT 暂缓;news 模块 CRUD 搁置(news 内容已作 RAG 素材);/stream 与 /agent/stream 并存待 C3 决定去留。
