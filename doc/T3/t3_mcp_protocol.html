@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T3 · MCP 协议与能力接入 — study-fastapi</title><style>
+  :root {
+    --ink: #1f2430; --muted: #526070; --line: #dbe3eb; --bg: #ffffff;
+    --soft: #f4f7fb; --code-bg: #18212d; --code-ink: #edf2f8;
+    --accent: #0b6bcb; --ok: #2e9e57; --ok-bg: #eefaf0;
+    --warn-bg: #fff8e8; --think-bg: #f2f0ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.8 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header.hero { padding: 52px max(24px, calc((100vw - 900px)/2)) 38px;
+    background: linear-gradient(180deg, var(--soft), var(--bg));
+    border-bottom: 1px solid var(--line); }
+  .hero .kicker { color: var(--accent); font-weight: 600; letter-spacing: .08em; }
+  .hero h1 { margin: 8px 0 12px; font-size: clamp(27px, 4vw, 36px); line-height: 1.3; }
+  .hero p { margin: 0; color: var(--muted); max-width: 68ch; }
+  main { max-width: 900px; margin: 0 auto; padding: 8px 24px 80px; }
+  .toc { margin-top: 26px; padding: 20px 24px; background: var(--soft);
+    border: 1px solid var(--line); border-radius: 12px; }
+  .toc h2 { margin: 0 0 10px; font-size: 17px; border: 0; padding: 0; }
+  .toc ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 28px;
+    margin: 0; padding-left: 22px; }
+  .toc a, a { color: var(--accent); text-underline-offset: 3px; }
+  .toc a { text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  section { margin-top: 48px; scroll-margin-top: 20px; }
+  h2 { font-size: 22px; line-height: 1.4; padding-bottom: 10px; margin: 0 0 18px; border-bottom: 2px solid var(--line); }
+  h2 .no { color: var(--accent); margin-right: 8px; font-family: ui-monospace, monospace; }
+  h3 { font-size: 18px; margin: 32px 0 10px; line-height: 1.45; }
+  p, ul, ol { margin-top: 10px; margin-bottom: 14px; }
+  li + li { margin-top: 4px; }
+  .muted { color: var(--muted); }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 10px;
+    overflow-x: auto; font: 13.5px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    tab-size: 4; }
+  code.inline { background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 6px; font: 90% ui-monospace, Menlo, monospace; color: #9a4818;
+    overflow-wrap: anywhere; }
+  pre .c { color: #b0bbc9; } pre .k { color: #ffad78; font-weight: 600; } pre .s { color: #b7df83; }
+  .box { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .box.ok { background: var(--ok-bg); border-left-color: var(--ok); }
+  .box.warn { background: var(--warn-bg); border-left-color: #d9a400; }
+  .box.think { background: var(--think-bg); border-left-color: #6f5bd6; }
+  .box b.t { display: block; margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0 24px; font-size: 15px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  .steps { counter-reset: step; }
+  .step { margin: 30px 0; }
+  .step > h3::before { counter-increment: step; content: "步骤 " counter(step) " · ";
+    color: var(--accent); font-weight: 700; }
+  details { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 12px 0; background: var(--soft); }
+  summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
+  details[open] { background: #fff; }
+  .lab > summary { color: var(--accent); }
+  footer { border-top: 1px solid var(--line); color: var(--muted); text-align: center; padding: 24px; font-size: 13px; }
+  @media (max-width: 700px) {
+    header.hero { padding: 36px 20px 28px; }
+    main { padding: 8px 18px 56px; }
+    .toc ol { grid-template-columns: 1fr; }
+    table { display: block; overflow-x: auto; }
+    table tbody { display: table; min-width: 620px; width: 100%; }
+    table.wide tbody { min-width: 850px; }
+    pre { padding: 14px; font-size: 12px; }
+  }
+  @media print {
+    body { color: #000; }
+    header.hero { padding: 20px 0; }
+    main { max-width: none; padding: 0; }
+    .toc { display: none; }
+    section { break-inside: avoid-page; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #000; background: #f3f3f3; }
+    pre .c, pre .k, pre .s { color: #000; }
+    details > * { display: block; }
+  }
+
+
+
+  .file-label {font:600 14px/1.5 ui-monospace,monospace; color:var(--accent); margin-top:24px; overflow-wrap:anywhere;}
+  .flow {border:1px solid var(--line); background:var(--soft); color:var(--ink); white-space:pre-wrap;}
+  .lesson-nav {display:flex;flex-wrap:wrap;gap:8px 16px;margin:16px 0;}
+  .lesson-nav a {padding:4px 8px;border:1px solid var(--line);border-radius:6px;text-decoration:none;}
+  .table-wrap {overflow-x:auto;}
+  .table-wrap table {min-width:620px;}
+  @media print {section {break-inside:auto;} h2,h3,.file-label {break-after:avoid;}}
+</style></head><body>
+<header class="hero"><div class="kicker">AGENT 开发 · 专题课 T3</div><h1>MCP 协议与能力接入</h1><p>在已有 L7 的 stdio + JSON-RPC 基础上补齐三类原语，并审视错误、并发和关闭流程。练习固定使用 2025-06-18，避免把不同版本的消息混在一起。</p></header>
+<main><nav class="lesson-nav" aria-label="专题课导航"><a href="../T1/t1_agent_ecosystem.html">T1 · Agent 生态总览</a><a href="../T2/t2_cli_executor.html">T2 · CLI 与工具执行器</a><a href="../T3/t3_mcp_protocol.html">T3 · MCP 协议与能力接入</a><a href="../T4/t4_skill_loader.html">T4 · SKILL 与按需加载</a><a href="../T5/t5_rules_execution.html">T5 · Rules 与执行边界</a></nav><nav class="toc" aria-label="本课目录"><h2>本课目录</h2><ol><li><a href="#part-1">本课目标</a></li><li><a href="#part-2">背景回顾：项目里已有哪一半</a></li><li><a href="#part-3">原理：三类原语与上下文入口</a></li><li><a href="#part-4">动手一：提供三类能力的离线 server</a></li><li><a href="#part-5">动手二：完整请求加锁的 client</a></li><li><a href="#part-6">接回现有 Agent：发现、映射、执行</a></li><li><a href="#part-7">思考题与详解</a></li><li><a href="#part-8">验证实验</a></li><li><a href="#part-9">对比小结与进阶预告</a></li></ol></nav><section id="part-1"><h2><span class="no">01</span>本课目标</h2><p>实现并观察 tools/list→tools/call、resources/list→resources/read、prompts/list→prompts/get；把协议结果、业务失败和连接失败分清。理解为什么共享 stdout 必须有唯一读取者,以及最小串行 client 怎样保证正确性。</p><div class="box ok"><b class="t">练习方式</b>本课代码是供你亲手输入的教学内容。Agent 维护 doc/ 课件；app/、scripts/ 和配置由你自己创建或修改。先运行独立实验，再按接入说明修改主项目。代码中的演示工具与目录均会明确标注，不把实验结果当作模型端到端验收。</div></section><section id="part-2"><h2><span class="no">02</span>背景回顾：项目里已有哪一半</h2><div class="table-wrap"><table><tr><th>位置</th><th>现有行为</th><th>扩展时的边界</th></tr><tr><td>app/main.py · lifespan</td><td>start → register_mcp_tools → yield → stop</td><td>连接由应用生命周期管理,不在每个工具调用里重建。</td></tr><tr><td>app/services/mcp/client.py</td><td>initialize、initialized、tools/list、tools/call</td><td>目前没有资源与提示词方法,没有检查返回版本或按能力跳过发现。</td></tr><tr><td>scripts/l7_mcp_server.py</td><td>只声明 tools,调用 execute_tool 检索知识库</td><td>真实检索依赖配置/embedding/数据库;协议实验先用固定数据。</td></tr><tr><td>tools.py · get_all_tool_schemas</td><td>MCP 元数据转换成模型工具 schema,同名覆盖内置</td><td>并非所有 MCP inputSchema 都能诚实 cast 到项目的扁平 _ParamsSchema。</td></tr></table></div><p>现有 McpClient._recv 每次调用自己 readline,且用共享 self._request_id 等待结果。不同会话共享同一个 client,可能并发进入,即使单个 agent 内部顺序调用也会争抢响应。它还会跳过不匹配的消息,若其中是另一个调用的响应,这个响应便丢了。stop 当前 terminate 后未 wait,也值得在正式化时补齐。</p></section><section id="part-3"><h2><span class="no">03</span>原理：三类原语与上下文入口</h2><div class="table-wrap"><table><tr><th>原语</th><th>通常由谁决定使用</th><th>数据形状</th><th>如何进入模型</th></tr><tr><td>tools</td><td>模型选择,host 执行</td><td>inputSchema 定义参数;结果 content/isError</td><td>host 将结果写入绑定 tool_call_id 的 tool 消息。</td></tr><tr><td>resources</td><td>host 选择,也可提供 UI 供用户选</td><td>URI + contents;文本 text 或二进制 blob</td><td>host 读取后将其作为有来源的参考资料注入。</td></tr><tr><td>prompts</td><td>用户选择模板,host 展开</td><td>字符串参数 → user/assistant messages</td><td>host 按内容类型映射为模型消息,不会自动启动推理。</td></tr></table></div><pre class="flow">initialize(协商版本/能力) → notifications/initialized(不回复)
+→ 发现目录 → 选择 URI / 名称 → read / get / call
+→ 验证 JSON-RPC 外壳 → 验证业务 result → host 决定使用方式</pre><p>列目录不是读全文。资源模板 resources/templates/list 描述 URI 模式,不是穷举所有资源；资源和提示词可以按需加载,不必一启动就塞进模型。目录可能返回 nextCursor,正式 client 应循环翻页并合并结果。示例固定一页,若出现游标就让断言失败,不能悄悄丢后续页。</p><div class="table-wrap"><table><tr><th>失败</th><th>表现</th><th>接收方动作</th></tr><tr><td>JSON 语法错误</td><td>-32700</td><td>定位发送端序列化或 stdout 污染。</td></tr><tr><td>未知方法/非法参数</td><td>-32601 / -32602</td><td>修正请求,保留服务端错误信息。</td></tr><tr><td>资源不存在</td><td>-32002</td><td>换合法 URI,不把空内容当成功。</td></tr><tr><td>工具业务失败</td><td>result.isError=true</td><td>协议仍成功,将业务错误作为结果交回模型。</td></tr><tr><td>EOF/超时/取消</td><td>本地连接异常</td><td>清理连接;不能靠重复调用掩盖失败。</td></tr></table></div><p class="muted">核对依据：<a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle">生命周期</a> · <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">Tools</a> · <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/resources">Resources</a> · <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/prompts">Prompts</a></p></section><section id="part-4"><h2><span class="no">04</span>动手一：提供三类能力的离线 server</h2><p>创建 scripts/t3_mcp_server.py。这里 search_knowledge_base 使用固定文本,保留业务工具名称以便对照 L7,但它不是实际 RAG。stdout 只输出一行一个 JSON；将诊断写入 stderr。服务端只支持文本、小消息和串行处理,不声明可选订阅能力。</p><p class="file-label">由你创建：scripts/t3_mcp_server.py</p><pre data-file="scripts/t3_mcp_server.py"><code>&quot;&quot;&quot;T3 离线协议实验台:只提供固定文本,不访问真实知识库。&quot;&quot;&quot;
+
+import json
+import sys
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+VERSION = &quot;2025-06-18&quot;
+URI = &quot;study://kb/usage-guide&quot;
+TEXT = &quot;检索片段只是证据,需要核对相关性。&quot;
+
+
+class Request(BaseModel):
+    model_config = ConfigDict(strict=True)
+    jsonrpc: str
+    id: int | str | None = None
+    method: str
+    params: dict[str, object] = Field(default_factory=dict)
+
+
+class ToolArgs(BaseModel):
+    model_config = ConfigDict(strict=True, extra=&quot;forbid&quot;)
+    question: str
+
+
+class PromptArgs(BaseModel):
+    model_config = ConfigDict(strict=True, extra=&quot;forbid&quot;)
+    question: str
+    result: str
+
+
+def send(message: dict[str, object]):
+    print(json.dumps(message, ensure_ascii=False), flush=True)
+
+
+def dispatch(req: Request):
+    if req.method == &quot;initialize&quot;:
+        return {
+            &quot;protocolVersion&quot;: VERSION,
+            &quot;serverInfo&quot;: {&quot;name&quot;: &quot;t3-lab&quot;, &quot;version&quot;: &quot;0.1&quot;},
+            &quot;capabilities&quot;: {&quot;tools&quot;: {}, &quot;resources&quot;: {}, &quot;prompts&quot;: {}},
+        }
+    if req.method == &quot;tools/list&quot;:
+        return {
+            &quot;tools&quot;: [
+                {
+                    &quot;name&quot;: &quot;search_knowledge_base&quot;,
+                    &quot;description&quot;: &quot;离线固定检索样本&quot;,
+                    &quot;inputSchema&quot;: ToolArgs.model_json_schema(),
+                }
+            ]
+        }
+    if req.method == &quot;tools/call&quot;:
+        if req.params.get(&quot;name&quot;) != &quot;search_knowledge_base&quot;:
+            raise ValueError(&quot;未知工具&quot;)
+        args = ToolArgs.model_validate(req.params.get(&quot;arguments&quot;, {}))
+        failed = args.question == &quot;模拟失败&quot;
+        text = json.dumps({&quot;error&quot;: &quot;模拟检索失败&quot;} if failed else {&quot;result&quot;: [{&quot;content&quot;: TEXT}]}, ensure_ascii=False)
+        return {&quot;content&quot;: [{&quot;type&quot;: &quot;text&quot;, &quot;text&quot;: text}], &quot;isError&quot;: failed}
+    if req.method == &quot;resources/list&quot;:
+        return {&quot;resources&quot;: [{&quot;uri&quot;: URI, &quot;name&quot;: &quot;kb-guide&quot;, &quot;mimeType&quot;: &quot;text/plain&quot;}]}
+    if req.method == &quot;resources/read&quot;:
+        if req.params.get(&quot;uri&quot;) != URI:
+            raise FileNotFoundError(&quot;资源不存在&quot;)
+        return {&quot;contents&quot;: [{&quot;uri&quot;: URI, &quot;mimeType&quot;: &quot;text/plain&quot;, &quot;text&quot;: TEXT}]}
+    if req.method == &quot;prompts/list&quot;:
+        return {
+            &quot;prompts&quot;: [
+                {
+                    &quot;name&quot;: &quot;review_retrieval&quot;,
+                    &quot;description&quot;: &quot;分析检索证据&quot;,
+                    &quot;arguments&quot;: [{&quot;name&quot;: &quot;question&quot;, &quot;required&quot;: True}, {&quot;name&quot;: &quot;result&quot;, &quot;required&quot;: True}],
+                }
+            ]
+        }
+    if req.method == &quot;prompts/get&quot;:
+        if req.params.get(&quot;name&quot;) != &quot;review_retrieval&quot;:
+            raise ValueError(&quot;未知提示词&quot;)
+        prompt_args = PromptArgs.model_validate(req.params.get(&quot;arguments&quot;, {}))
+        return {
+            &quot;messages&quot;: [
+                {
+                    &quot;role&quot;: &quot;user&quot;,
+                    &quot;content&quot;: {
+                        &quot;type&quot;: &quot;text&quot;,
+                        &quot;text&quot;: f&quot;问题:{prompt_args.question}\n证据:{prompt_args.result}\n请解释证据是否足够。&quot;,
+                    },
+                }
+            ]
+        }
+    raise NotImplementedError(&quot;未知方法&quot;)
+
+
+def main():
+    initialized = False
+    ready = False
+    for line in sys.stdin:
+        try:
+            raw: object = json.loads(line)
+            req = Request.model_validate(raw)
+            if req.jsonrpc != &quot;2.0&quot;:
+                raise ValueError(&quot;jsonrpc 必须为 2.0&quot;)
+        except json.JSONDecodeError:
+            send({&quot;jsonrpc&quot;: &quot;2.0&quot;, &quot;id&quot;: None, &quot;error&quot;: {&quot;code&quot;: -32700, &quot;message&quot;: &quot;JSON 解析失败&quot;}})
+            continue
+        except (ValidationError, ValueError):
+            send({&quot;jsonrpc&quot;: &quot;2.0&quot;, &quot;id&quot;: None, &quot;error&quot;: {&quot;code&quot;: -32600, &quot;message&quot;: &quot;非法请求&quot;}})
+            continue
+        if req.id is None:
+            if initialized and req.method == &quot;notifications/initialized&quot;:
+                ready = True
+            continue  # 通知不回复;本实验不支持客户端发来的其他通知。
+        try:
+            if req.method != &quot;initialize&quot; and not ready:
+                raise ValueError(&quot;尚未完成初始化&quot;)
+            result = dispatch(req)
+            if req.method == &quot;initialize&quot;:
+                initialized = True
+            send({&quot;jsonrpc&quot;: &quot;2.0&quot;, &quot;id&quot;: req.id, &quot;result&quot;: result})
+        except (ValueError, FileNotFoundError, NotImplementedError) as exc:
+            code = (
+                -32002
+                if isinstance(exc, FileNotFoundError)
+                else -32601
+                if isinstance(exc, NotImplementedError)
+                else -32602
+            )
+            send({&quot;jsonrpc&quot;: &quot;2.0&quot;, &quot;id&quot;: req.id, &quot;error&quot;: {&quot;code&quot;: code, &quot;message&quot;: str(exc)}})
+
+
+if __name__ == &quot;__main__&quot;:
+    main()</code></pre><div class="table-wrap"><table><tr><th>代码位置</th><th>关键解释</th></tr><tr><td>Request.model_validate</td><td>解析后立即验证 envelope,params 收窄为 dict[str, object]。</td></tr><tr><td>ToolArgs / PromptArgs</td><td>外部 arguments 再单独验证,禁止把字典键存在误当作类型正确。</td></tr><tr><td>dispatch</td><td>每个 method 返回 result 的内容,统一由 main 加 jsonrpc 和 id。</td></tr><tr><td>initialized / ready</td><td>已返回 initialize 和已收到 initialized 是两个状态。</td></tr><tr><td>isError</td><td>固定问题“模拟失败”用于检查业务错误合同,没有进行真实检索。</td></tr></table></div><p>这是教学协议子集：未实现批处理、server→client 请求、取消通知、多媒体、动态清单和订阅。2025-06-18 的订阅可使用 resources/subscribe 与通知,后续版本需要另按规范核对；本课不混用版本。</p></section><section id="part-5"><h2><span class="no">05</span>动手二：完整请求加锁的 client</h2><p>创建 scripts/t3_mcp_client.py,与 server 放同一目录。客户端启动后检查版本与能力,然后发无 id 的 initialized 通知。request 把 id 分配、写入和读取包在同一把锁内；超时或取消会关闭连接。</p><p class="file-label">由你创建：scripts/t3_mcp_client.py</p><pre data-file="scripts/t3_mcp_client.py"><code>&quot;&quot;&quot;T3 用户抄入 scripts/t3_mcp_client.py,与同目录的 t3_mcp_server.py 配套。&quot;&quot;&quot;
+
+import asyncio
+import json
+import sys
+from asyncio.subprocess import Process
+from contextlib import suppress
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class RpcError(BaseModel):
+    code: int
+    message: str
+
+
+class Envelope(BaseModel):
+    model_config = ConfigDict(strict=True)
+    jsonrpc: Literal[&quot;2.0&quot;]
+    id: int | str | None = None
+    method: str | None = None
+    result: dict[str, object] | None = None
+    error: RpcError | None = None
+
+
+class InitResult(BaseModel):
+    protocolVersion: str
+    capabilities: dict[str, dict[str, object]]
+
+
+class TextBlock(BaseModel):
+    type: Literal[&quot;text&quot;]  # 本练习只支持文本,遇到其他类型明确验证失败。
+    text: str
+
+
+class CallResult(BaseModel):
+    content: list[TextBlock]
+    isError: bool = False
+
+
+class ResourceContent(BaseModel):
+    uri: str
+    text: str
+
+
+class ReadResult(BaseModel):
+    contents: list[ResourceContent]
+
+
+class PromptMessage(BaseModel):
+    role: Literal[&quot;user&quot;, &quot;assistant&quot;]
+    content: TextBlock
+
+
+class PromptResult(BaseModel):
+    messages: list[PromptMessage]
+
+
+class ToolMeta(BaseModel):
+    name: str
+    inputSchema: dict[str, object]
+
+
+class ToolList(BaseModel):
+    tools: list[ToolMeta]
+    nextCursor: str | None = None
+
+
+class ResourceMeta(BaseModel):
+    uri: str
+    name: str
+
+
+class ResourceList(BaseModel):
+    resources: list[ResourceMeta]
+    nextCursor: str | None = None
+
+
+class PromptMeta(BaseModel):
+    name: str
+    arguments: list[dict[str, object]] = Field(default_factory=list)
+
+
+class PromptList(BaseModel):
+    prompts: list[PromptMeta]
+    nextCursor: str | None = None
+
+
+class RemoteError(RuntimeError):
+    def __init__(self, error: RpcError):
+        super().__init__(f&quot;{error.code}: {error.message}&quot;)
+        self.code = error.code
+
+
+class LabClient:
+    def __init__(self):
+        self.proc: Process | None = None
+        self.next_id = 0
+        self.lock = asyncio.Lock()
+        self.capabilities: dict[str, dict[str, object]] = {}
+
+    async def start(self, server: Path):
+        self.proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            str(server),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=None,
+        )
+        try:
+            raw = await self.request(
+                &quot;initialize&quot;,
+                {
+                    &quot;protocolVersion&quot;: &quot;2025-06-18&quot;,
+                    &quot;capabilities&quot;: {},
+                    &quot;clientInfo&quot;: {&quot;name&quot;: &quot;t3-host&quot;, &quot;version&quot;: &quot;0.1&quot;},
+                },
+            )
+            init = InitResult.model_validate(raw)
+            if init.protocolVersion != &quot;2025-06-18&quot;:
+                raise RuntimeError(&quot;本实验只实现 2025-06-18,拒绝未知版本&quot;)
+            self.capabilities = init.capabilities
+            await self.send({&quot;jsonrpc&quot;: &quot;2.0&quot;, &quot;method&quot;: &quot;notifications/initialized&quot;})
+        except BaseException:
+            await self.close()
+            raise
+
+    async def send(self, payload: dict[str, object]):
+        if self.proc is None or self.proc.stdin is None:
+            raise RuntimeError(&quot;未连接&quot;)
+        self.proc.stdin.write((json.dumps(payload, ensure_ascii=False) + &quot;\n&quot;).encode())
+        await self.proc.stdin.drain()
+
+    async def request(self, method: str, params: dict[str, object]):
+        capability = method.split(&quot;/&quot;, 1)[0]
+        if capability in {&quot;tools&quot;, &quot;resources&quot;, &quot;prompts&quot;} and capability not in self.capabilities:
+            raise RuntimeError(f&quot;server 未声明 {capability}&quot;)
+        # 必须覆盖“取 id → 写 → 读”全程,只锁写入无法防止两个 readline 争抢。
+        async with self.lock:
+            if self.proc is None or self.proc.stdout is None:
+                raise RuntimeError(&quot;未连接&quot;)
+            self.next_id += 1
+            request_id = self.next_id
+            try:
+                async with asyncio.timeout(2):
+                    await self.send({&quot;jsonrpc&quot;: &quot;2.0&quot;, &quot;id&quot;: request_id, &quot;method&quot;: method, &quot;params&quot;: params})
+                    while True:
+                        line = await self.proc.stdout.readline()
+                        if not line:
+                            raise RuntimeError(&quot;server 提前关闭 stdout&quot;)
+                        response = Envelope.model_validate_json(line)
+                        if &quot;id&quot; not in response.model_fields_set:
+                            if not response.method:
+                                raise RuntimeError(&quot;非法通知&quot;)
+                            # 最小版只观察通知;不能在这里悄悄实现 server→client 请求。
+                            print(&quot;通知:&quot;, response.method)
+                            continue
+                        if response.id != request_id:
+                            raise RuntimeError(&quot;响应 id 不匹配,串行连接已失去同步&quot;)
+                        if (response.result is None) == (response.error is None):
+                            raise RuntimeError(&quot;result/error 必须恰好有一个&quot;)
+                        break
+            except BaseException:
+                # 超时/取消后关闭连接,不能把迟到响应误分给下一次请求。
+                await self.close()
+                raise
+            if response.error is not None:
+                raise RemoteError(response.error)
+            assert response.result is not None
+            return response.result
+
+    async def close(self):
+        proc = self.proc
+        self.proc = None
+        self.capabilities = {}
+        if proc is None:
+            return
+        if proc.stdin is not None:
+            proc.stdin.close()  # stdio 生命周期:EOF 先给 server 正常退出机会。
+        try:
+            await asyncio.wait_for(proc.wait(), 0.5)
+        except TimeoutError:
+            if proc.returncode is None:
+                with suppress(ProcessLookupError):
+                    proc.kill()
+            await proc.wait()
+
+
+async def main():
+    client = LabClient()
+    try:
+        await client.start(Path(__file__).with_name(&quot;t3_mcp_server.py&quot;))
+        tools = ToolList.model_validate(await client.request(&quot;tools/list&quot;, {}))
+        resources = ResourceList.model_validate(await client.request(&quot;resources/list&quot;, {}))
+        prompts = PromptList.model_validate(await client.request(&quot;prompts/list&quot;, {}))
+        assert tools.nextCursor is resources.nextCursor is prompts.nextCursor is None
+        assert tools.tools[0].name == &quot;search_knowledge_base&quot;
+        uri = resources.resources[0].uri
+        read = ReadResult.model_validate(await client.request(&quot;resources/read&quot;, {&quot;uri&quot;: uri}))
+        prompt = PromptResult.model_validate(
+            await client.request(
+                &quot;prompts/get&quot;,
+                {
+                    &quot;name&quot;: prompts.prompts[0].name,
+                    &quot;arguments&quot;: {&quot;question&quot;: &quot;怎样判断证据?&quot;, &quot;result&quot;: read.contents[0].text},
+                },
+            )
+        )
+        assert prompt.messages[0].role == &quot;user&quot;
+        succeeded = CallResult.model_validate(
+            await client.request(
+                &quot;tools/call&quot;,
+                {&quot;name&quot;: &quot;search_knowledge_base&quot;, &quot;arguments&quot;: {&quot;question&quot;: &quot;怎样判断证据?&quot;}},
+            )
+        )
+        assert not succeeded.isError and succeeded.content[0].text
+        failed = CallResult.model_validate(
+            await client.request(
+                &quot;tools/call&quot;,
+                {
+                    &quot;name&quot;: &quot;search_knowledge_base&quot;,
+                    &quot;arguments&quot;: {&quot;question&quot;: &quot;模拟失败&quot;},
+                },
+            )
+        )
+        assert failed.isError
+        error_cases: list[tuple[str, dict[str, object], int]] = [
+            (&quot;resources/read&quot;, {&quot;uri&quot;: &quot;study://missing&quot;}, -32002),
+            (&quot;prompts/get&quot;, {&quot;name&quot;: &quot;review_retrieval&quot;, &quot;arguments&quot;: {}}, -32602),
+        ]
+        for method, params, expected in error_cases:
+            try:
+                await client.request(method, params)
+            except RemoteError as exc:
+                assert exc.code == expected
+            else:
+                raise AssertionError(&quot;应该返回协议错误&quot;)
+        # gather 并发进入,锁保证底层按一次完整 RPC 串行完成。
+        results = await asyncio.gather(*[client.request(&quot;resources/read&quot;, {&quot;uri&quot;: uri}) for _ in range(3)])
+        assert len(results) == 3
+        print(&quot;T3:三原语、业务错误、协议错误、并发进入串行完成均通过&quot;)
+        print(&quot;准备交给模型的 prompt:&quot;, prompt.messages[0].content.text)
+    finally:
+        await client.close()
+
+
+if __name__ == &quot;__main__&quot;:
+    asyncio.run(main())</code></pre><p>这里用 Pydantic 的 Literal 限定文本内容,所以收到图片时会明确失败,不会像当前 ContentBlock 的空字符串默认值那样把未知内容静默丢掉。把“只支持文本”暴露成可检查的边界,比假装兼容全部 MCP 内容更利于调试。</p><p>close 先关闭 stdin 给出 EOF,等待一小段退出宽限,仍不退出才 kill 并 wait。这个 0.5 秒是关闭期限,不是用定时器猜测执行顺序。连接超时后不复用它,避免迟到响应混进下一次调用。</p></section><section id="part-6"><h2><span class="no">06</span>接回现有 Agent：发现、映射、执行</h2><pre class="flow">tools/list → McpToolMeta → register_mcp_tools
+→ get_all_tool_schemas → 模型提出 tool_call
+→ execute_tool → call_tool → tool result → 下一轮模型</pre><p>正式代码接入时,把 request 和 close 的协议逻辑移到现有 McpClient,让 start、call_tool、read_resource、get_prompt 都经过同一个 request。不要给每个方法再写一个读取 stdout 的循环。对于 resources/prompts,需要 host 明确入口,不能一律塞进 TOOL_REGISTRY 伪装成模型工具。</p><pre><code># 放在 agent.py 等允许 SDK 类型的组装边界；以下为文本 prompt 的完整转换函数。
+# PromptResult 为本课 client 定义的模型，正式化后从 services/mcp 导入。
+def prompt_to_messages(prompt: PromptResult):
+    converted: list[ChatCompletionMessageParam] = []
+    for item in prompt.messages:
+        if item.role == &quot;user&quot;:
+            converted.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: item.content.text})
+        else:
+            converted.append({&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: item.content.text})
+    return converted</code></pre><p>上面使用 agent.py 已有的 ChatCompletionMessageParam。用户选模板后,host 才 get_prompt 并调用转换；返回的 messages 由应用明确决定是否持久化。资源正文应标注 URI 并作为参考数据,不要因为来自 MCP 就升格为全局 system 规则。完整多媒体映射和 UI/路由入参属于后续产品接入,这份协议实验不伪造已经实现。</p><p>若需要真正并发 RPC,改成一个后台 reader 持续读取,用 pending[id] → Future 分发。写请求先登记 Future 再发送；响应到来完成对应 Future；通知进入专门队列；EOF 使所有 pending 失败。server→client 请求带 id 和 method,不能当作通知跳过。超时还要处理晚到响应和 pending 清理。先掌握串行锁,再引入这套额外状态。</p></section><section id="part-7"><h2><span class="no">07</span>思考题与详解</h2><details><summary>为什么 asyncio.gather 在本课能成功,却不代表 server 并行执行？</summary><p>锁把底层 RPC 串行化。gather 只使多个调用同时等待入口,保护正确性后吞吐仍受顺序处理限制。</p></details><details><summary>为什么资源与只读工具都能提供数据,还要区分？</summary><p>关键在交互合同：工具面向一次操作与参数,资源面向 URI 标识的数据。只读并不能自动决定它必须是 resource,要看 host 怎样发现和使用。</p></details><details><summary>提示词模板返回 messages 后,模型已经回答了吗？</summary><p>没有。模板可以在 server 上生成消息,但模型调用由 host 决定。若 server 自己做推理,那是另一个显式设计,不能从 prompts/get 推断。</p></details><details><summary>MCP schema 能直接 cast 成项目 ToolParam 吗？</summary><p>只能在形状确实兼容时。项目 _ParamsSchema 只支持较窄的属性形状,外部 schema 可能有数组、嵌套对象、枚举等。cast 不转换也不验证,第三方接入要调整合同和验证策略。</p></details></section><section id="part-8"><h2><span class="no">08</span>验证实验</h2><pre><code>uv run python -m ruff check scripts/t3_mcp_server.py scripts/t3_mcp_client.py
+uv run python -m mypy --check-untyped-defs scripts/t3_mcp_server.py scripts/t3_mcp_client.py
+uv run python scripts/t3_mcp_client.py</code></pre><p>断言覆盖三类目录、资源读、模板展开、工具业务失败、错误 URI、缺参数、多个调用同时进入 client。再做三个故障实验：① server 往 stdout 打一行普通日志,应触发解析失败并清理连接；② initialize 返回不支持的版本,client 应拒绝；③让一个 method 延迟超过 2 秒,应超时并关闭。每次实验后恢复代码。</p><p>协议实验无需 .env、数据库和模型。真实 L7 server 的 tools/call 仍需 embedding 与数据库,不能将离线固定返回的通过视为实际知识库验证通过。</p></section><section id="part-9"><h2><span class="no">09</span>对比小结与进阶预告</h2><p>进程正常退出、JSON-RPC result 成功、工具业务成功是三层不同结论。下一课 T4 处理上下文：工具与资源已经能够访问,怎样只在需要时加载操作手册？Streamable HTTP、认证和多路复用作为后续机动专题,不强塞进本次基本原语练习。</p></section></main><footer>study-fastapi · T3 · 2026-10-21 · 纯 HTML / 离线可读</footer></body></html>

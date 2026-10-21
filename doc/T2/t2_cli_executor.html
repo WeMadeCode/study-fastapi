@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T2 · CLI 与工具执行器 — study-fastapi</title><style>
+  :root {
+    --ink: #1f2430; --muted: #526070; --line: #dbe3eb; --bg: #ffffff;
+    --soft: #f4f7fb; --code-bg: #18212d; --code-ink: #edf2f8;
+    --accent: #0b6bcb; --ok: #2e9e57; --ok-bg: #eefaf0;
+    --warn-bg: #fff8e8; --think-bg: #f2f0ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.8 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header.hero { padding: 52px max(24px, calc((100vw - 900px)/2)) 38px;
+    background: linear-gradient(180deg, var(--soft), var(--bg));
+    border-bottom: 1px solid var(--line); }
+  .hero .kicker { color: var(--accent); font-weight: 600; letter-spacing: .08em; }
+  .hero h1 { margin: 8px 0 12px; font-size: clamp(27px, 4vw, 36px); line-height: 1.3; }
+  .hero p { margin: 0; color: var(--muted); max-width: 68ch; }
+  main { max-width: 900px; margin: 0 auto; padding: 8px 24px 80px; }
+  .toc { margin-top: 26px; padding: 20px 24px; background: var(--soft);
+    border: 1px solid var(--line); border-radius: 12px; }
+  .toc h2 { margin: 0 0 10px; font-size: 17px; border: 0; padding: 0; }
+  .toc ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 28px;
+    margin: 0; padding-left: 22px; }
+  .toc a, a { color: var(--accent); text-underline-offset: 3px; }
+  .toc a { text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  section { margin-top: 48px; scroll-margin-top: 20px; }
+  h2 { font-size: 22px; line-height: 1.4; padding-bottom: 10px; margin: 0 0 18px; border-bottom: 2px solid var(--line); }
+  h2 .no { color: var(--accent); margin-right: 8px; font-family: ui-monospace, monospace; }
+  h3 { font-size: 18px; margin: 32px 0 10px; line-height: 1.45; }
+  p, ul, ol { margin-top: 10px; margin-bottom: 14px; }
+  li + li { margin-top: 4px; }
+  .muted { color: var(--muted); }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 10px;
+    overflow-x: auto; font: 13.5px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    tab-size: 4; }
+  code.inline { background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 6px; font: 90% ui-monospace, Menlo, monospace; color: #9a4818;
+    overflow-wrap: anywhere; }
+  pre .c { color: #b0bbc9; } pre .k { color: #ffad78; font-weight: 600; } pre .s { color: #b7df83; }
+  .box { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .box.ok { background: var(--ok-bg); border-left-color: var(--ok); }
+  .box.warn { background: var(--warn-bg); border-left-color: #d9a400; }
+  .box.think { background: var(--think-bg); border-left-color: #6f5bd6; }
+  .box b.t { display: block; margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0 24px; font-size: 15px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  .steps { counter-reset: step; }
+  .step { margin: 30px 0; }
+  .step > h3::before { counter-increment: step; content: "步骤 " counter(step) " · ";
+    color: var(--accent); font-weight: 700; }
+  details { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 12px 0; background: var(--soft); }
+  summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
+  details[open] { background: #fff; }
+  .lab > summary { color: var(--accent); }
+  footer { border-top: 1px solid var(--line); color: var(--muted); text-align: center; padding: 24px; font-size: 13px; }
+  @media (max-width: 700px) {
+    header.hero { padding: 36px 20px 28px; }
+    main { padding: 8px 18px 56px; }
+    .toc ol { grid-template-columns: 1fr; }
+    table { display: block; overflow-x: auto; }
+    table tbody { display: table; min-width: 620px; width: 100%; }
+    table.wide tbody { min-width: 850px; }
+    pre { padding: 14px; font-size: 12px; }
+  }
+  @media print {
+    body { color: #000; }
+    header.hero { padding: 20px 0; }
+    main { max-width: none; padding: 0; }
+    .toc { display: none; }
+    section { break-inside: avoid-page; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #000; background: #f3f3f3; }
+    pre .c, pre .k, pre .s { color: #000; }
+    details > * { display: block; }
+  }
+
+
+
+  .file-label {font:600 14px/1.5 ui-monospace,monospace; color:var(--accent); margin-top:24px; overflow-wrap:anywhere;}
+  .flow {border:1px solid var(--line); background:var(--soft); color:var(--ink); white-space:pre-wrap;}
+  .lesson-nav {display:flex;flex-wrap:wrap;gap:8px 16px;margin:16px 0;}
+  .lesson-nav a {padding:4px 8px;border:1px solid var(--line);border-radius:6px;text-decoration:none;}
+  .table-wrap {overflow-x:auto;}
+  .table-wrap table {min-width:620px;}
+  @media print {section {break-inside:auto;} h2,h3,.file-label {break-after:avoid;}}
+</style></head><body>
+<header class="hero"><div class="kicker">AGENT 开发 · 专题课 T2</div><h1>CLI 与工具执行器</h1><p>把模型提出的工具调用变成一个可等待、可取消、可检查结果的子进程。重点是执行器合同，而不是命令行语法大全。</p></header>
+<main><nav class="lesson-nav" aria-label="专题课导航"><a href="../T1/t1_agent_ecosystem.html">T1 · Agent 生态总览</a><a href="../T2/t2_cli_executor.html">T2 · CLI 与工具执行器</a><a href="../T3/t3_mcp_protocol.html">T3 · MCP 协议与能力接入</a><a href="../T4/t4_skill_loader.html">T4 · SKILL 与按需加载</a><a href="../T5/t5_rules_execution.html">T5 · Rules 与执行边界</a></nav><nav class="toc" aria-label="本课目录"><h2>本课目录</h2><ol><li><a href="#part-1">本课目标</a></li><li><a href="#part-2">背景回顾：从 execute_tool 到进程</a></li><li><a href="#part-3">原理：进程合同与资源生命周期</a></li><li><a href="#part-4">动手实现：一份可独立运行的实验</a></li><li><a href="#part-5">接回工具注册表：具体改动位置</a></li><li><a href="#part-6">思考题与详解</a></li><li><a href="#part-7">验证实验</a></li><li><a href="#part-8">对比小结与进阶预告</a></li></ol></nav><section id="part-1"><h2><span class="no">01</span>本课目标</h2><p>亲手实现一个异步 CLI 执行器：传参不经 shell,同时读取 stdout/stderr,限制保留的输出,区分启动失败、非零退出、超时与取消。最后把它映射到 TOOL_REGISTRY。</p><div class="box ok"><b class="t">练习方式</b>本课代码是供你亲手输入的教学内容。Agent 维护 doc/ 课件；app/、scripts/ 和配置由你自己创建或修改。先运行独立实验，再按接入说明修改主项目。代码中的演示工具与目录均会明确标注，不把实验结果当作模型端到端验收。</div></section><section id="part-2"><h2><span class="no">02</span>背景回顾：从 execute_tool 到进程</h2><p>现有 app/services/tools.py 的 execute_tool(name, arguments_json) 解析 JSON,检查必填键,优先分发 MCP,否则查 TOOL_REGISTRY。ToolFunc 的合同是异步函数接收 dict[str, object]、返回 str。新增 CLI 工具可以保持此合同,在内部启动程序。</p><pre class="flow">模型参数 text → _text_stats / text_stats → run_cli(argv)
+→ Python 子进程 → 机器结果 stdout + 诊断 stderr + returncode
+→ 业务适配器产生 JSON 字符串 → 原 tool_call_id 的 tool 消息</pre><p>现有 _validate_required 只检查键是否存在,不检查值的类型。示例会在读取 text 时用 isinstance 收窄。工具名由 host 注册,可执行文件和脚本路径也由 host 固定,不让模型传任意命令字符串。</p></section><section id="part-3"><h2><span class="no">03</span>原理：进程合同与资源生命周期</h2><div class="table-wrap"><table><tr><th>选择</th><th>原因</th><th>容易误解之处</th></tr><tr><td>create_subprocess_exec(*argv)</td><td>每个参数是独立字符串,不会把分号当作 shell 语句</td><td>它不等于沙箱；被调用的程序仍有自身权限与参数语义。</td></tr><tr><td>stdout/stderr 同时读取</td><td>任一管道写满都可能阻塞子进程</td><td>await proc.wait() 加一根未排空的 PIPE 可能僵住。</td></tr><tr><td>保留上限 + 继续排空</td><td>控制内存,同时允许子进程退出</td><td>StreamReader 的 limit 是缓冲阈值,不是总输出预算。</td></tr><tr><td>timeout + finally 回收</td><td>超时或取消不遗留正在运行的直接子进程</td><td>取消本身不是业务成功,不应被转成一段空结果。</td></tr><tr><td>退出码与业务结果分开</td><td>0 是进程层成功;业务 JSON 仍可能报告失败</td><td>非零退出时 stderr 有诊断价值,不可只返回 stdout。</td></tr></table></div><p>本例只管理直接子进程,要求演示 worker 不派生后代。真实 CLI 会启动其他进程时,需按操作系统设计进程组终止;不要把本例宣称为完整进程树监管器。输出截断也不等于停止工作量,持续输出还要靠运行时预算控制。</p><p class="muted">核对依据：<a href="https://docs.python.org/3.13/library/asyncio-subprocess.html">Python 3.13 异步子进程</a></p></section><section id="part-4"><h2><span class="no">04</span>动手实现：一份可独立运行的实验</h2><p>步骤一：创建 scripts/t2_cli_lab.py,完整代码如下。同一文件有 host 和 worker 两个入口：正常运行执行断言；加 --worker 则作为子进程处理参数。sys.executable 保证使用同一个 Python 环境。</p><p class="file-label">由你创建：scripts/t2_cli_lab.py</p><pre data-file="scripts/t2_cli_lab.py"><code>&quot;&quot;&quot;T2:由用户抄入 scripts/t2_cli_lab.py;本文件不依赖模型或数据库。&quot;&quot;&quot;
+
+import argparse
+import asyncio
+import json
+import sys
+import time
+from contextlib import suppress
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class CliResult:
+    returncode: int | None
+    stdout: str
+    stderr: str
+    truncated: bool
+    error: str | None = None
+
+
+async def read_bounded(reader: asyncio.StreamReader, keep_bytes: int):
+    &quot;&quot;&quot;只保留前 keep_bytes 字节,但继续排空管道,避免子进程卡在写入。&quot;&quot;&quot;
+    saved = bytearray()
+    total = 0
+    while chunk := await reader.read(4096):
+        total += len(chunk)
+        saved.extend(chunk[: max(0, keep_bytes - len(saved))])
+    # 截断可能落在一个汉字中间,replace 显式替换残缺字符。
+    return saved.decode(&quot;utf-8&quot;, errors=&quot;replace&quot;), total &gt; keep_bytes
+
+
+async def run_cli(argv: list[str], cwd: Path, timeout: float = 2.0, keep_bytes: int = 4096):
+    if not argv or timeout &lt;= 0 or keep_bytes &lt; 0:
+        raise ValueError(&quot;argv 不能为空,timeout 必须为正,keep_bytes 不能为负&quot;)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=cwd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except OSError as exc:
+        return CliResult(None, &quot;&quot;, &quot;&quot;, False, f&quot;启动失败:{exc}&quot;)
+    assert proc.stdout is not None and proc.stderr is not None
+    # 两根管道同时排空。只读 stdout,可能被写满的 stderr 反向阻塞。
+    out_task = asyncio.create_task(read_bounded(proc.stdout, keep_bytes))
+    err_task = asyncio.create_task(read_bounded(proc.stderr, keep_bytes))
+    error: str | None = None
+    try:
+        async with asyncio.timeout(timeout):
+            await proc.wait()
+            out, out_cut = await out_task
+            err, err_cut = await err_task
+    except TimeoutError:
+        error = &quot;执行超时&quot;
+    finally:
+        # 超时或上层取消都要回收子进程。取消异常不会变成成功结果。
+        if proc.returncode is None:
+            with suppress(ProcessLookupError):
+                proc.kill()
+        await proc.wait()
+        for task in (out_task, err_task):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(out_task, err_task, return_exceptions=True)
+    if error is not None:
+        return CliResult(proc.returncode, &quot;&quot;, &quot;&quot;, False, error)
+    return CliResult(proc.returncode, out, err, out_cut or err_cut)
+
+
+def worker():
+    &quot;&quot;&quot;独立子进程:stdout 只给机器结果,stderr 给诊断。mode 仅用于故障实验。&quot;&quot;&quot;
+    parser = argparse.ArgumentParser()
+    parser.add_argument(&quot;--mode&quot;, choices=[&quot;count&quot;, &quot;fail&quot;, &quot;flood&quot;, &quot;wait&quot;], default=&quot;count&quot;)
+    parser.add_argument(&quot;text&quot;)
+    args = parser.parse_args(sys.argv[2:])
+    if args.mode == &quot;fail&quot;:
+        print(&quot;模拟业务失败&quot;, file=sys.stderr)
+        raise SystemExit(3)
+    if args.mode == &quot;wait&quot;:
+        time.sleep(5)  # 真正制造慢命令,仅用于超时/取消实验。
+    if args.mode == &quot;flood&quot;:
+        print(&quot;x&quot; * 100_000)
+        print(&quot;y&quot; * 100_000, file=sys.stderr)
+        return
+    print(json.dumps({&quot;text&quot;: args.text, &quot;characters&quot;: len(args.text)}, ensure_ascii=False))
+
+
+async def text_stats(args: dict[str, object]):
+    &quot;&quot;&quot;与 TOOL_REGISTRY 的 ToolFunc 同形:业务参数进,JSON 字符串出。&quot;&quot;&quot;
+    value = args.get(&quot;text&quot;)
+    if not isinstance(value, str):
+        return json.dumps({&quot;error&quot;: &quot;text 必须是字符串&quot;}, ensure_ascii=False)
+    result = await run_cli(
+        [sys.executable, str(Path(__file__).resolve()), &quot;--worker&quot;, &quot;--&quot;, value],
+        Path(__file__).resolve().parent,
+    )
+    if result.error or result.returncode != 0 or result.truncated:
+        return json.dumps({&quot;error&quot;: &quot;CLI 未完整成功&quot;, &quot;detail&quot;: asdict(result)}, ensure_ascii=False)
+    # 此处先交回业务 JSON;消费其中字段的一侧仍应使用 Pydantic 验证。
+    return result.stdout
+
+
+async def main():
+    base = [sys.executable, str(Path(__file__).resolve()), &quot;--worker&quot;]
+    cwd = Path.cwd()
+    ok = await run_cli([*base, &quot;--&quot;, &quot;你好; echo unsafe&quot;], cwd)
+    assert ok.returncode == 0 and &quot;你好; echo unsafe&quot; in ok.stdout
+    fail = await run_cli([*base, &quot;--mode&quot;, &quot;fail&quot;, &quot;a&quot;], cwd)
+    assert fail.returncode == 3 and &quot;模拟业务失败&quot; in fail.stderr
+    flood = await run_cli([*base, &quot;--mode&quot;, &quot;flood&quot;, &quot;a&quot;], cwd, keep_bytes=64)
+    assert flood.truncated and len(flood.stdout.encode()) == 64
+    slow = await run_cli([*base, &quot;--mode&quot;, &quot;wait&quot;, &quot;a&quot;], cwd, timeout=0.2)
+    assert slow.error == &quot;执行超时&quot;
+    missing = await run_cli([&quot;/definitely-not-an-installed-command&quot;], cwd)
+    assert missing.error is not None and missing.returncode is None
+    task = asyncio.create_task(run_cli([*base, &quot;--mode&quot;, &quot;wait&quot;, &quot;a&quot;], cwd))
+    await asyncio.sleep(0.05)  # 测试时让子进程启动;产品路径不靠延时排序。
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    else:
+        raise AssertionError(&quot;取消必须传回调用方&quot;)
+    assert &quot;error&quot; in await text_stats({&quot;text&quot;: 123})
+    print(&quot;T2:成功、非零退出、输出限制、超时、启动失败、取消、类型错误均通过&quot;)
+
+
+if __name__ == &quot;__main__&quot;:
+    if len(sys.argv) &gt; 1 and sys.argv[1] == &quot;--worker&quot;:
+        worker()
+    else:
+        asyncio.run(main())</code></pre><div class="table-wrap"><table><tr><th>函数</th><th>读代码时关注什么</th></tr><tr><td>read_bounded</td><td>总字节数与保留字节数分开；即使已保留足够内容,循环仍继续排空。</td></tr><tr><td>run_cli</td><td>输入验证在启动前；OSError 是启动失败；finally 始终等待进程回收。</td></tr><tr><td>worker</td><td>真实 CLI 可以带登录态或交互提示。本例禁用 stdin,只演示可脚本化的机器接口。</td></tr><tr><td>text_stats</td><td>把 CliResult 适配回工具字符串；截断结果不当作完整 JSON 解析。</td></tr><tr><td>main</td><td>每条断言都对应一个行为,不用模型打分判断进程是否被正确处理。</td></tr></table></div><p>步骤二：理解异常出口。TimeoutError 在执行器内转成明确结果；CancelledError 穿过 finally 返回调用方。此处只演示单次取消,服务关闭时还需确保清理任务不被反复取消。</p><p>步骤三：接回项目时,把执行器部分移到 app/services/cli_executor.py,把 worker 单独保留为受控脚本,并为 tools.py 写一个异步适配函数。先只用本实验测试,再执行下面的项目接入练习。</p></section><section id="part-5"><h2><span class="no">05</span>接回工具注册表：具体改动位置</h2><p>若先直接复用实验文件,可以在 tools.py 导入它的 text_stats 作为过渡,不引入 SDK。下列片段由你加入现有定义之后；最终工程化时再把通用执行器移到 services。</p><pre><code>from scripts.t2_cli_lab import text_stats
+
+TOOL_REGISTRY[&quot;text_stats&quot;] = text_stats
+TOOLS_SCHEMA.append({
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {
+        &quot;name&quot;: &quot;text_stats&quot;,
+        &quot;description&quot;: &quot;精确计算用户提供文本的字符数。&quot;,
+        &quot;parameters&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;properties&quot;: {&quot;text&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;要统计的原文&quot;}},
+            &quot;required&quot;: [&quot;text&quot;],
+        },
+    },
+})</code></pre><p>run_agent 与 run_agent_stream 都已经经过 execute_tool,这一步不需要复制两套 subprocess 逻辑。工具名称不能与 MCP 同名,否则现有优先级会转向 MCP。正式接入还应把 stdout JSON 用 Pydantic 建模,避免未来更换 CLI 后返回非 JSON 或字段漂移。</p><p>为什么练习里不让模型传 executable？因为选择可执行程序属于 host 提供能力的范围；模型只填 text 业务参数。即使用 exec 而不用 shell,开放任意程序路径仍然是开放执行权限。</p></section><section id="part-6"><h2><span class="no">06</span>思考题与详解</h2><details><summary>为什么超时后不能只 return 一个 error？</summary><p>父协程返回并不会让子进程自动结束。finally 必须终止仍在运行的进程并 wait,否则程序继续耗资源。</p></details><details><summary>为什么输出保留满了以后还继续 read？</summary><p>如果不读,子进程可能卡在写满的管道上,无法退出。另一种可选设计是达到上限立即终止子进程,但要把这种终止定义为失败,不能当成正常完成。</p></details><details><summary>为什么不把一个 shell 命令整体拼成字符串？</summary><p>模型文本一旦被 shell 解释,引号、分号、重定向都会改变行为。argv 保留数据边界;-- 还避免文本被 argparse 当作选项。</p></details></section><section id="part-7"><h2><span class="no">07</span>验证实验</h2><pre><code>uv run python -m ruff check scripts/t2_cli_lab.py
+uv run python -m mypy --check-untyped-defs scripts/t2_cli_lab.py
+uv run python scripts/t2_cli_lab.py
+uv run python scripts/t2_cli_lab.py --worker -- &quot;你好; echo unsafe&quot;</code></pre><p>最后一条应输出包含完整原文的 JSON,不能另行执行 echo。主测试包含成功、非零退出、双管道大量输出、超时、程序不存在、取消和非法 text 类型。然后将 timeout 调大并再运行 wait 模式,对比“慢但成功”和“超时失败”。</p><p>接入主项目后,先直接 await execute_tool("text_stats", JSON字符串),再通过现有聊天接口让模型统计原文；检查 tool_call_id 和最终结果。不要仅凭模型答对字符数就认为它真的调用了 CLI,应查看工具轨迹。</p></section><section id="part-8"><h2><span class="no">08</span>对比小结与进阶预告</h2><p>进程内函数与 CLI 工具都可以保持 ToolFunc 的形状,区别在执行器内部。下一课 T3 在进程间增加消息协议和连接生命周期：一个长驻 server 可以处理多次请求,无需每次从头启动 CLI。</p></section></main><footer>study-fastapi · T2 · 2026-10-21 · 纯 HTML / 离线可读</footer></body></html>

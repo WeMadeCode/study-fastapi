@@ -1,764 +1,102 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>T1 · Agent 生态地图:SKILL / MCP / CLI — study-fastapi</title>
-<style>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T1 · Agent 生态总览 — study-fastapi</title><style>
   :root {
-    --ink: #1f2430; --muted: #5b6472; --line: #e3e7ee; --bg: #ffffff;
-    --soft: #f6f8fb; --code-bg: #14181f; --code-ink: #e6edf3;
+    --ink: #1f2430; --muted: #526070; --line: #dbe3eb; --bg: #ffffff;
+    --soft: #f4f7fb; --code-bg: #18212d; --code-ink: #edf2f8;
     --accent: #0b6bcb; --ok: #2e9e57; --ok-bg: #eefaf0;
     --warn-bg: #fff8e8; --think-bg: #f2f0ff;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 16px/1.75 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
-  header.hero { padding: 48px 24px 32px; background: linear-gradient(180deg, var(--soft), var(--bg));
+    font: 16px/1.8 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header.hero { padding: 52px max(24px, calc((100vw - 900px)/2)) 38px;
+    background: linear-gradient(180deg, var(--soft), var(--bg));
     border-bottom: 1px solid var(--line); }
   .hero .kicker { color: var(--accent); font-weight: 600; letter-spacing: .08em; }
-  .hero h1 { margin: 8px 0 6px; font-size: 30px; }
-  .hero p { margin: 0; color: var(--muted); max-width: 860px; }
+  .hero h1 { margin: 8px 0 12px; font-size: clamp(27px, 4vw, 36px); line-height: 1.3; }
+  .hero p { margin: 0; color: var(--muted); max-width: 68ch; }
   main { max-width: 900px; margin: 0 auto; padding: 8px 24px 80px; }
-  section { margin-top: 44px; }
-  h2 { font-size: 21px; padding-bottom: 8px; margin: 0 0 14px; border-bottom: 2px solid var(--line); }
+  .toc { margin-top: 26px; padding: 20px 24px; background: var(--soft);
+    border: 1px solid var(--line); border-radius: 12px; }
+  .toc h2 { margin: 0 0 10px; font-size: 17px; border: 0; padding: 0; }
+  .toc ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 28px;
+    margin: 0; padding-left: 22px; }
+  .toc a, a { color: var(--accent); text-underline-offset: 3px; }
+  .toc a { text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  section { margin-top: 48px; scroll-margin-top: 20px; }
+  h2 { font-size: 22px; line-height: 1.4; padding-bottom: 10px; margin: 0 0 18px; border-bottom: 2px solid var(--line); }
   h2 .no { color: var(--accent); margin-right: 8px; font-family: ui-monospace, monospace; }
-  h3 { font-size: 17px; margin: 26px 0 8px; }
+  h3 { font-size: 18px; margin: 32px 0 10px; line-height: 1.45; }
+  p, ul, ol { margin-top: 10px; margin-bottom: 14px; }
+  li + li { margin-top: 4px; }
   .muted { color: var(--muted); }
-  pre { background: var(--code-bg); color: var(--code-ink); padding: 14px 16px; border-radius: 10px;
-    overflow-x: auto; font: 13.5px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 10px;
+    overflow-x: auto; font: 13.5px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    tab-size: 4; }
   code.inline { background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
-    padding: 1px 6px; font: 90% ui-monospace, Menlo, monospace; color: #b3541e; }
-  pre .c { color: #7d8794; } pre .k { color: #ff9b57; font-weight: 600; } pre .s { color: #9ece6a; }
+    padding: 1px 6px; font: 90% ui-monospace, Menlo, monospace; color: #9a4818;
+    overflow-wrap: anywhere; }
+  pre .c { color: #b0bbc9; } pre .k { color: #ffad78; font-weight: 600; } pre .s { color: #b7df83; }
   .box { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
   .box.ok { background: var(--ok-bg); border-left-color: var(--ok); }
   .box.warn { background: var(--warn-bg); border-left-color: #d9a400; }
   .box.think { background: var(--think-bg); border-left-color: #6f5bd6; }
   .box b.t { display: block; margin-bottom: 4px; }
-  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 15px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0 24px; font-size: 15px; }
   th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
   th { background: var(--soft); }
+  tr:nth-child(even) td { background: #fbfcfe; }
   .steps { counter-reset: step; }
   .step { margin: 30px 0; }
   .step > h3::before { counter-increment: step; content: "步骤 " counter(step) " · ";
     color: var(--accent); font-weight: 700; }
-  details { border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; margin: 12px 0; background: var(--soft); }
-  summary { cursor: pointer; font-weight: 600; }
+  details { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 12px 0; background: var(--soft); }
+  summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
+  details[open] { background: #fff; }
+  .lab > summary { color: var(--accent); }
   footer { border-top: 1px solid var(--line); color: var(--muted); text-align: center; padding: 24px; font-size: 13px; }
-</style>
-</head>
-<body>
-
-<header class="hero">
-  <div class="kicker">专题插播 · T1 —— 进入 L8 之前的生态地图</div>
-  <h1>Agent 生态三大件:SKILL / MCP / CLI</h1>
-  <p>你每天都在用一个真实的 Agent——就是眼前这个 Claude Code。它会自己跑命令、会查资料、会连 MCP server、
-     会按 SKILL 手册办事。这一整套「外挂生态」的名词(SKILL、MCP、CLI、Hook、子 Agent、插件、CLAUDE.md)
-     最近一直在你眼前晃——还包括你写过的 CLAUDE.md 和配置过的权限规则(Rules)——但它们各自是什么、
-     边界在哪、什么时候用哪个,值得在进 L8 之前一次性钉死。
-     本课每个概念都锚定到<b>你已经写过的代码</b>(L4 工具注册表、L7 MCP)和你<b>正在生效的配置</b>
-     (CLAUDE.md、权限规则)以及<b>路线图上将要写的课</b>(L8 记忆、L9 上下文、L11 子 Agent)
-     ——不是泛泛的名词科普,而是给你自己的项目画参照系。</p>
-</header>
-
-<main>
-
-<!-- ============ 01 ============ -->
-<section>
-  <h2><span class="no">01</span>本课目标</h2>
-  <ul>
-    <li>建立一张地图:<b>CLI / MCP / SKILL</b> 三条「给 agent 装能力」的路径,各自解决什么问题、边界在哪</li>
-    <li>一句话认全周边概念:<b>Hook / 子 Agent / 插件 / CLAUDE.md / Rules</b>,并知道它们对应路线图上哪一课</li>
-    <li>认识 <b>Rules</b>:约束的软硬光谱(CLAUDE.md 声明式条款 → 权限规则 → Hook)、层级叠加与写法实践</li>
-    <li>获得判别力:拿到一个能力需求,能判断该做成 CLI 工具、MCP server 还是 SKILL</li>
-    <li>动手:亲手写一个最小 SKILL(含脚本),在你的 Claude Code 里<b>真实触发</b>它</li>
-    <li>每个概念对照你自己的项目:<code class="inline">TOOLS_SCHEMA</code> / <code class="inline">TOOL_REGISTRY</code> / <code class="inline">McpClient</code> 分别是生态里哪个角色的雏形</li>
-  </ul>
-  <div class="box warn">
-    <b class="t">本课的动手范围(重要)</b>
-    本课是概念课 + 轻动手。动手对象全部在 <code class="inline">~/.claude/skills/</code>(你自己的 Claude 配置目录)和终端命令,
-    <b>不碰 study-fastapi 的任何源码</b>——项目「不写源码」规则不受影响。练完想清理,删目录即可。
-  </div>
-</section>
-
-<!-- ============ 02 ============ -->
-<section>
-  <h2><span class="no">02</span>背景回顾:你已经造过这些轮子</h2>
-
-  <p>先复习一个从 L4 起就没变过的公式:</p>
-  <pre>agent = <span class="k">模型</span>(只会生成 token)
-      + <span class="k">上下文</span>(每轮喂给它的 messages + system + 工具简历)
-      + <span class="k">循环</span>(agentic loop:模型说要调工具 → 你执行 → 结果喂回去 → 再问模型)
-      + <span class="k">执行器</span>(真正干活的那只「手」)</pre>
-
-  <p>你在 L4/L7 写的代码,就是这个公式的裸写版。对着自己的代码认一遍(节选自
-     <code class="inline">app/services/tools.py</code>):</p>
-
-  <pre><span class="c"># 给模型看的「简历」:JSON Schema 形状,每轮全量进上下文</span>
-TOOLS_SCHEMA: list[ToolParam] = [
-    { <span class="s">"type"</span>: <span class="s">"function"</span>,
-      <span class="s">"function"</span>: { <span class="s">"name"</span>: <span class="s">"search_knowledge_base"</span>, <span class="s">"description"</span>: <span class="s">"检索站内知识库..."</span>, ... } },
-    ...
-]
-
-<span class="c"># 名字 → 真正干活的函数。模型只报名字,执行靠这张表</span>
-TOOL_REGISTRY: dict[str, ToolFunc] = { <span class="s">"search_knowledge_base"</span>: _search_knowledge_base, ... }</pre>
-
-  <p>以及 L7 的 MCP 正式化(<code class="inline">app/services/mcp/client.py</code>)——你裸写过 JSON-RPC 三连:</p>
-  <pre><span class="c"># McpClient.start():握手 → 通知 → 发现,和你在 scripts/l7_mcp_client.py 里手写的三连一样</span>
-<span class="k">await</span> self._send({ ..., <span class="s">"method"</span>: <span class="s">"initialize"</span>, <span class="s">"params"</span>: {<span class="s">"protocolVersion"</span>: <span class="s">"2025-06-18"</span>, ...} })
-<span class="k">await</span> self._send({ ..., <span class="s">"method"</span>: <span class="s">"notifications/initialized"</span> })
-<span class="k">await</span> self._send({ ..., <span class="s">"method"</span>: <span class="s">"tools/list"</span> })</pre>
-
-  <div class="box think">
-    <b class="t">带着这个问题往下读</b>
-    你这套「什么都自己造」的打法,好处是完全理解每个字节;坏处是<b>别人造过的轮子你接不进来</b>,
-    你造的东西<b>别人也用不上</b>。整个 Agent 生态,本质上就是在回答一个问题:
-    <b>能力和知识怎么在「一个模型」和「一堆工具/一堆规范」之间标准化地流动?</b>
-    接下来三个概念,就是这个问题的三个不同答案。
-  </div>
-</section>
-
-<!-- ============ 03 ============ -->
-<section>
-  <h2><span class="no">03</span>CLI:agent 的手</h2>
-
-  <h3>CLI 为什么天然适配 agent</h3>
-  <p>CLI(命令行程序)是四十年 Unix 哲学的产物,它有一套意外的、几乎是为 agent 量身定做的接口约定:</p>
-  <table>
-    <tr><th>CLI 的老传统</th><th>对 agent 意味着什么</th></tr>
-    <tr><td><code class="inline">stdin</code> / <code class="inline">stdout</code> 是唯一接口</td><td>模型天然读写文本——CLI 的输入输出就是模型的语言</td></tr>
-    <tr><td>exit code 表示成败(0 / 非 0)</td><td>错误信号机器可读,agent 不用猜「刚才那步成功了吗」</td></tr>
-    <tr><td>可组合(管道、脚本)</td><td>几个简单工具拼出复杂能力,不用每个都重新开发</td></tr>
-    <tr><td>无 UI、无状态、跑完即退</td><td>agent 每次调用都是干净的一次性请求,不背会话包袱</td></tr>
-  </table>
-  <p>所以在 Agent 时代,<b>一个接口清晰的 CLI 本身就是一个现成的 agent 工具</b>——
-     <code class="inline">gh</code>(GitHub 官方 CLI)、你机器上的 <code class="inline">arkcli</code>、Postman CLI 都是例子。
-     agent 拿着 Bash 这一个工具,理论上就能调用整个操作系统的所有 CLI。</p>
-
-  <h3>Agent CLI:终端里的 agentic loop</h3>
-  <p>反过来,<b>把 agentic loop 本身做成一个 CLI</b>,就是「Agent CLI」——Claude Code 就是这个词的标本:
-     你在终端里跟它对话,它在循环里读文件、跑命令、改代码。它有两种用法:</p>
-  <pre><span class="c"># 用法一:交互式(你现在正在用的)——人在回路里,每轮看结果</span>
-claude
-
-<span class="c"># 用法二:headless 非交互——把 agent 当管道节点,给脚本/CI 用</span>
-claude -p <span class="s">"统计 app/ 下所有 py 文件的总行数"</span> --output-format json</pre>
-  <p><code class="inline">-p</code>(print 模式)= 跑完自动退出、结果打到 stdout;<code class="inline">--output-format json</code> =
-     结构化输出(文本结果 + 用量统计等),方便上游程序解析。这一刻,agent 变成了<b>一条可以被别的程序调用的命令</b>——
-     CLI 既是 agent 的手,也可以是 agent 的壳。</p>
-  <div class="box ok">
-    <b class="t">Claude Agent SDK,一句话</b>
-    把 Claude Code 的整套 harness(agentic loop、工具集、权限系统)以库的形式开放出来
-    (Python / TypeScript),让你不用从零裸写就能拥有同款 agent 运行时。
-    对你而言:你的 <code class="inline">run_agent</code> 是「库形式的 agent」(约两百行、完全透明),
-    Claude Code 是「CLI 形式的 agent」(功能全、黑盒度更高)——同一种东西的两种封装,没有谁替代谁。
-  </div>
-
-  <h3>对照你的项目</h3>
-  <p>你在 L4 给模型装的手是<b>进程内函数</b>(<code class="inline">TOOL_REGISTRY</code> 里的 Python 函数),
-     CLI 是<b>进程外程序</b>(起个子进程跑完就退)。两者的模型侧接口完全一样——都是「工具简历 + 名字调用」,
-     差别只在执行器怎么落地。你的 <code class="inline">scripts/l6_*.py</code> 系列练习脚本,
-     就是「给 agent 用的 CLI 工具」的雏形:参数走命令行、结果走 stdout、出错返回非零。</p>
-</section>
-
-<!-- ============ 04 ============ -->
-<section>
-  <h2><span class="no">04</span>MCP:agent 的通用插座</h2>
-
-  <h3>先复习你写过的部分</h3>
-  <p>MCP(Model Context Protocol)你在 L7 已经<b>从字节层面裸写过了</b>:JSON-RPC 2.0 做线格式,
-     <code class="inline">initialize → notifications/initialized → tools/list → tools/call</code> 四步对话,
-     stdio 做本地传输。所以本节不重复实现,只补<b>生态视角</b>——L7 课上没讲的那一半。</p>
-
-  <h3>三种角色:host / client / server</h3>
-  <table>
-    <tr><th>角色</th><th>是什么</th><th>你项目里的对应物</th></tr>
-    <tr><td><b>Host</b></td><td>用户面对的 agent 应用,管理多个 client</td><td>你的 FastAPI 应用(整个 <code class="inline">main.py</code> + agent)</td></tr>
-    <tr><td><b>Client</b></td><td>host 内部管理<b>一条</b> server 连接的模块</td><td><code class="inline">McpClient</code>(一个实例管一个 server 子进程)</td></tr>
-    <tr><td><b>Server</b></td><td>能力的提供方,暴露 tools / resources / prompts</td><td><code class="inline">scripts/l7_mcp_server.py</code>(你家知识库检索)</td></tr>
-  </table>
-  <p>MCP 解决的是经典的 <b>N×M 接法问题</b>:M 个 agent 应用想接 N 种外部能力,两两各写一套对接 = N×M 份胶水代码。
-     有了标准协议,变成 N+M:server 作者只对 MCP 实现,host 作者也只对 MCP 实现,中间自由组合。
-     你 L7 的感受就是这个协议的价值——<code class="inline">uvx mcp-server-time</code> 一个第三方工具,
-     你的 client 没改一行协议代码就接上了。</p>
-
-  <h3>三原语:你只用过 tools</h3>
-  <p>MCP server 可以暴露三类原语(primitives),L7 你只实现了第一个:</p>
-  <table>
-    <tr><th>原语</th><th>语义</th><th>类比</th></tr>
-    <tr><td><b>tools</b></td><td>模型<b>主动调用</b>的函数(模型决定何时用)</td><td>你的 TOOL_REGISTRY</td></tr>
-    <tr><td><b>resources</b></td><td>应用<b>主动拉取</b>的数据(文件、记录,应用决定何时读)</td><td>—(L7 没做)</td></tr>
-    <tr><td><b>prompts</b></td><td>server 预制的<b>提示词模板</b>(用户显式选用)</td><td>—(L7 没做)</td></tr>
-  </table>
-  <p>区分口诀:<b>谁控制时机</b>。模型控制 → tool;应用控制 → resource;用户控制 → prompt。
-     另外协议还定义了 client 侧能力(让 server 反过来请求 host 做事):sampling(server 借 host 的模型做推理)、
-     roots(server 感知 host 的文件系统范围)、elicitation(server 向用户要补充输入)——知道有这回事即可。</p>
-
-  <h3>传输层演进:协议版本时间线</h3>
-  <p>MCP 是一个<b>活的协议</b>,版本号就是日期。到本课写作时(2026-10),演进如下:</p>
-  <table>
-    <tr><th>版本</th><th>关键字</th></tr>
-    <tr><td>2024-11-05</td><td>首版:stdio + HTTP+SSE 两种传输</td></tr>
-    <tr><td>2025-03-26</td><td><b>Streamable HTTP</b> 取代 HTTP+SSE:单端点、可断流重连</td></tr>
-    <tr><td>2025-06-18</td><td>鉴权与安全细化——<b>你 client.py 握手时报的就是这个版本号</b></td></tr>
-    <tr><td>2025-11-25</td><td>上一代稳定版(2026-07-28 的变更基线)</td></tr>
-    <tr><td><b>2026-07-28</b>(现行)</td><td>迄今最大修订:无状态核心(去掉 <code class="inline">Mcp-Session-Id</code>、去掉 GET 流端点)、
-        多轮往返请求(MRTR)、扩展(Extensions)框架、Tasks、鉴权加固;官方 SDK 月下载近 5 亿次</td></tr>
-  </table>
-  <p>怎么读这张表:<b>stdio 至今是本地传输的主力,你的裸写知识完全不过时</b>;
-     大修订集中在远程传输——方向是「让 MCP server 像普通 HTTP 服务一样无状态部署、水平扩容」。
-     你 L7 只做了 stdio,Streamable HTTP 在机动专题清单里,到时候 stdio 的 JSON-RPC 知识直接平移。</p>
-
-  <div class="box warn">
-    <b class="t">MCP 的代价:简历常驻(本课最重要的伏笔)</b>
-    MCP 工具的 schema 是<b>启动时全量注入、每轮常驻</b>上下文的(你的
-    <code class="inline">get_all_tool_schemas()</code> 就是这么聚合的)。装一两个 server 很爽;
-    装 20 个、每个 15 个工具,300 份简历每轮都发——token 先炸,模型选择精度也会被稀释。
-    <b>这个问题怎么解?看下一节。</b>
-  </div>
-
-  <div class="box ok">
-    <b class="t">什么时候才值得写 MCP server</b>
-    能力要被<b>多个 host 复用</b>(你家的检索想让 Claude Code、别的 agent 都能用)、
-    接的是<b>外部系统</b>(时间、天气、公司内部系统)、需要<b>标准协议</b>换取生态兼容——这些时候写 MCP。
-    如果只是自家 app 自家用的进程内函数,<code class="inline">TOOL_REGISTRY</code> 反而更简单:
-    <b>别为了 MCP 而 MCP</b>。你 L7 的 search_knowledge_base 包成 server,动机是「练习协议」,
-    真实项目里它就是个进程内工具。
-  </div>
-</section>
-
-<!-- ============ 05 ============ -->
-<section>
-  <h2><span class="no">05</span>SKILL:agent 的操作手册</h2>
-
-  <h3>SKILL 是什么:一个目录</h3>
-  <p>Agent Skills 是 Anthropic 于 2025 年提出的开放格式(仓库 <code class="inline">anthropics/skills</code>,
-     已被多家 agent 产品采纳)。一个 skill 就是<b>一个文件夹</b>,长得像你给新同事写的 onboarding 手册:</p>
-  <pre>py-hand-check/                  ← skill 目录,名字即 skill 名
-├── SKILL.md                    ← 必需:YAML frontmatter + Markdown 正文
-├── scripts/                    ← 可选:可执行脚本(确定性步骤)
-├── references/                 ← 可选:按需加载的详细文档
-└── assets/                     ← 可选:输出时才用的模板/素材</pre>
-  <pre><span class="c"># SKILL.md 的头部(frontmatter),name 和 description 是必需字段</span>
----
-<span class="k">name</span>: py-hand-check
-<span class="k">description</span>: Python 代码自查清单。写完/改完 Python 代码后、被要求检查代码时使用。←...
----
-
-<span class="c"># 下面是正文:给模型看的操作步骤(Markdown)</span></pre>
-
-  <h3>核心机制:渐进式披露(progressive disclosure)</h3>
-  <p>这是 SKILL 与 MCP 工具的<b>本质差异</b>。skill 的内容分三级、按需加载:</p>
-  <table>
-    <tr><th>级别</th><th>内容</th><th>何时进上下文</th><th>体积</th></tr>
-    <tr><td><b>L1 元数据</b></td><td>frontmatter 的 name + description</td><td>会话启动,<b>常驻</b> system prompt</td><td>每个约几十 token</td></tr>
-    <tr><td><b>L2 正文</b></td><td>SKILL.md 的 Markdown 正文</td><td>模型判断「这个 skill 和当前任务相关」时</td><td>几百到几千 token</td></tr>
-    <tr><td><b>L3 附属</b></td><td>references/ 文档、scripts/ 脚本</td><td>正文引用了才读/才执行</td><td>不限</td></tr>
-  </table>
-  <p>对比一下账就明白了:30 个 MCP 工具 = 30 份完整简历常驻;30 个 skill = 30 个一句话简介常驻,
-     <b>正文只有被点名的那个才翻开</b>。装一百个 skill 也不炸上下文——这就是 Anthropic 工程博客里
-     「为什么我们停止造专用 agent、改造 skill」的答案:能力可以无限堆,<b>注意力成本恒定</b>。</p>
-
-  <h3>description 是路由键</h3>
-  <p>模型凭什么决定「翻不翻开某个 skill」?只凭 L1 的那一句 description。
-     所以官方要求 description 必须同时说清<b>「做什么」+「什么时候用」</b>,写得含糊,自动触发就失灵
-     ——本课验证实验会亲手做这个对照。同理,skill 多了以后,description 之间会「抢路由」:
-     写得越像,模型越分不清该翻哪个。</p>
-
-  <h3>脚本:确定性的事交给代码</h3>
-  <p>skill 里的 <code class="inline">scripts/</code> 是点睛之笔:<b>模型不亲自逐步执行手册里机械的部分,
-     而是调脚本来跑</b>,自己只负责判断和编排。比如「按规范校验一个 PDF」:
-     用哪个库、什么参数、怎么校验字段——这些确定性步骤写进 Python 脚本;「这份 PDF 的处理结果合不合理」
-     ——这个判断留给模型。口诀:<b>模糊的事让模型判断,确定的事让代码执行</b>。
-     你马上会在动手环节写一个这样的脚本。</p>
-
-  <h3>解剖你机器上的真实标本</h3>
-  <p>你的 <code class="inline">~/.claude/skills/</code> 下躺着 28 个真 skill,两个典型:</p>
-  <pre><span class="c"># 标本一:标准三段式(元数据 + 脚本 + 按需文档)</span>
-byted-web-search/
-├── SKILL.md            ← frontmatter: name / version / author / description / metadata
-├── scripts/web_search.py   ← 搜索就是跑这个脚本(Bash 调用)
-└── references/         ← quick-start / setup-guide / troubleshooting 三份按需文档
-
-<span class="c"># 标本二:description 写成「调度入口」</span>
-arkcli-doctor/
-├── SKILL.md            ← description 里直接写了「什么情况走我 / 什么情况归别的 skill」
-└── references/         ← 8 份细分文档:错误码、各 scope 的诊断手册……按需加载</pre>
-  <p>注意两个细节:① byted-web-search 的正文里写着「脚本在鉴权失败时引导配置」——
-     <b>手册和脚本是一体的</b>;② arkcli-doctor 的正文第一句是「MUST 先读
-     <code class="inline">../arkcli-shared/SKILL.md</code>」——<b>skill 之间可以互相引用</b>,
-     形成「总纲 → 分册」的文档树,这正是 L3(附属文件按需加载)的实际用法。
-     另外目录里还有个 <code class="inline">.arkcli-managed-skills.json</code>:26 个 skill 名对着一串哈希——
-     <b>托管安装</b>:skill 像软件包一样由工具统一分发、校验、升级。</p>
-
-  <h3>SKILL vs MCP:一张对照表(本课灵魂)</h3>
-  <table>
-    <tr><th></th><th>SKILL</th><th>MCP server</th></tr>
-    <tr><td>本质</td><td><b>程序性知识</b>(怎么做的方法包)</td><td><b>连接能力</b>(接什么的标准协议)</td></tr>
-    <tr><td>载体</td><td>纯 Markdown + 文件,无进程</td><td>协议 + 常驻进程/服务</td></tr>
-    <tr><td>进上下文</td><td>元数据常驻,正文按需(渐进披露)</td><td>工具 schema 全量常驻</td></tr>
-    <tr><td>类比</td><td>一本翻开的操作手册</td><td>一个电源插座</td></tr>
-    <tr><td>解决的问题</td><td>「这个领域该<b>怎么干</b>」的 know-how 复用</td><td>「这个系统<b>怎么接</b>」的 N+M 复用</td></tr>
-    <tr><td>组合关系</td><td colspan="2">skill 可以教 agent「怎么用某个 MCP 工具 / 某个 CLI」——手册可以写插座和扳手的用法,三者不互斥</td></tr>
-  </table>
-
-  <div class="box think">
-    <b class="t">对照你的项目(L9 伏笔)</b>
-    你的 <code class="inline">TOOLS_SCHEMA</code> 是「全量常驻」模式——3 个工具毫无压力,
-    但它和 MCP 工具池一样,工具一多就走 MCP 那条老路。「把『什么时候用什么工具』的知识按需注入」
-    正是 L9 上下文工程的课题,SKILL 就是这个思想的成熟产品。思考题 Q4 会让你亲手设计
-    「把 TOOLS_SCHEMA 改成两级加载」的方案。
-  </div>
-
-  <h3>SKILL 在 Claude Code 里的落位</h3>
-  <table>
-    <tr><th>位置</th><th>作用域</th><th>典型用途</th></tr>
-    <tr><td><code class="inline">~/.claude/skills/</code></td><td>个人级,所有项目可见</td><td>个人工作流、顺手工具</td></tr>
-    <tr><td><code class="inline">.claude/skills/</code>(项目内)</td><td>仅本项目</td><td>团队规范、项目专属流程</td></tr>
-    <tr><td>插件自带</td><td>随插件安装</td><td>第三方分发(你的 arkcli 全家桶就是)</td></tr>
-  </table>
-  <p>触发两种:<b>显式</b>——输入 <code class="inline">/skill名</code> 当斜杠命令用;
-     <b>自动</b>——你的请求和某个 description 匹配,模型自己决定翻开。API 侧同理:
-     Claude API 把 skill 装进代码执行容器(带文件系统的 VM),模型在里面读手册、跑脚本。</p>
-</section>
-
-<!-- ============ 06 ============ -->
-<section>
-  <h2><span class="no">06</span>周边概念速览:一张图认全</h2>
-
-  <p>把三大件放回全景,这是整张生态地图:</p>
-  <pre>             交互式对话 / claude -p(headless) / Agent SDK
-                            │
-  ┌─────────────────────────▼───────────────────────────┐
-  │           Agent CLI(Claude Code)=「壳」              │
-  │                                                     │
-  │    上下文(每轮组装)           agentic loop(脊柱)   │
-  │    ├─ CLAUDE.md       常驻 ◀────────注入────────     │
-  │    ├─ SKILL 元数据    常驻                           │
-  │    ├─ 工具简历        常驻 ────事件 / 结果────────▶  │
-  │    ├─ SKILL 正文      按需(翻手册)                  │
-  │    └─ references/     按需(L3)                     │
-  │                                                     │
-  │    loop 之下的「手」:                                │
-  │    ├─ Bash ─────────▶ CLI 程序(gh / arkcli / 脚本) │
-  │    ├─ Skill ────────▶ 翻开手册 → 指挥 Bash 跑脚本    │
-  │    └─ MCP client ───▶ stdio / Streamable HTTP       │
-  │                            └────▶ MCP server(外部系统)│
-  │                                                     │
-  │    Hook:loop 关键事件上的硬拦截(不进上下文)         │
-  │    子 Agent:另起一个独立 loop,只把结论带回主上下文   │
-  └─────────────────────────────────────────────────────┘</pre>
-
-  <table>
-    <tr><th>概念</th><th>一句话本质</th><th>进上下文吗</th><th>你身边的活例子 / 路线图对应</th></tr>
-    <tr>
-      <td><b>Hook</b></td>
-      <td>在 loop 的固定事件(工具调用前/后、提交提示词时……)自动执行你预设的命令——<b>确定性拦截点</b></td>
-      <td>不进。是代码级硬约束,不是给模型的提示</td>
-      <td>你今天亲眼见过:本课的课件就是在一个被 hook 管着的会话里写的——会话有
-          <code class="inline">UserPromptSubmit</code> hook(每轮注入路由规则)和
-          <code class="inline">PreToolUse</code> hook(拦下过一次格式错误的工具调用)。
-          <b>prompt 是软约束,hook 是硬约束</b>。→ L12 工具审批(human-in-the-loop)是它的应用</td>
-    </tr>
-    <tr>
-      <td><b>子 Agent</b></td>
-      <td>一个拥有<b>独立上下文</b>的 agent 实例,干完活只把结论带回主上下文</td>
-      <td>只有结论回主上下文 = <b>上下文隔离</b></td>
-      <td>主 agent 委托脏活(翻几十个文件),自己不被过程垃圾污染。
-          Claude Code 的子 agent 定义在 <code class="inline">.claude/agents/*.md</code>。
-          → 你将在 <b>L11 spawn_subagent</b> 裸写它</td>
-    </tr>
-    <tr>
-      <td><b>插件</b></td>
-      <td>把 skills + 命令 + 子 agent + hooks + MCP 配置<b>打包分发</b>的单元</td>
-      <td>安装时引入,机制同各部件</td>
-      <td>你机器上 26 个 arkcli-* skill 就是托管分发的活标本(.arkcli-managed-skills.json 记录哈希)</td>
-    </tr>
-    <tr>
-      <td><b>CLAUDE.md / AGENTS.md</b></td>
-      <td>声明式的项目指令与记忆,会话启动时<b>常驻注入</b>(全局 → 项目逐层叠加)</td>
-      <td>常驻(和 SKILL 正文相反!)</td>
-      <td>你这个项目就有两份在同时生效:用户全局 <code class="inline">~/.claude/CLAUDE.md</code> +
-          项目 <code class="inline">CLAUDE.md</code>。<b>它就是「人肉长期记忆」</b>→ L8 要让你的 bot 自己拥有它;层级与写法见 07 节</td>
-    </tr>
-    <tr>
-      <td><b>权限模式 / 沙箱</b></td>
-      <td>工具执行的闸门:允许/询问/拒绝,settings.json 里配置</td>
-      <td>不进(闸门本身),但结果会进</td>
-      <td>你项目里的 <code class="inline">.claude/settings.local.json</code> 就在干这个;写法见 07 节</td>
-    </tr>
-  </table>
-
-  <div class="box ok">
-    <b class="t">记忆口诀</b>
-    <b>CLI 给手,MCP 给插座,SKILL 给手册;Hook 给闸门,子 Agent 给分身,CLAUDE.md 给性格,Rules 给章程。</b>
-    这些机制全部长在同一个 agentic loop 上——你 L5 写的那个循环,就是整个生态的共同底座。
-    Rules 的专门一节在下一节(07)。
-  </div>
-</section>
-
-<!-- ============ 07 ============ -->
-<section>
-  <h2><span class="no">07</span>Rules:给 agent 定规矩</h2>
-
-  <p>三大件之外还有一类东西你天天在受益:<b>Rules——写成文件的约束条款</b>。它不改模型、不写代码,
-     就是「把规矩写成仓库里的 Markdown / JSON,agent 每次干活时自动生效」。
-     你项目的 CLAUDE.md、<code class="inline">.claude/settings.local.json</code>,都是 Rules。</p>
-
-  <h3>约束光谱:从软到硬</h3>
-  <p>「给 agent 定规矩」不是一个开关,是一条光谱——按<b>强制力</b>排列:</p>
-  <table>
-    <tr><th>强度</th><th>机制</th><th>本质</th><th>失败模式</th></tr>
-    <tr><td>最软</td><td>对话里随口叮嘱</td><td>一次性 prompt,关会话即失效</td><td>下个会话全忘</td></tr>
-    <tr><td>软</td><td><b>Rules 文件</b>(CLAUDE.md / AGENTS.md / .cursor/rules)</td><td>常驻注入的声明式条款——模型<b>读了靠自觉</b></td><td>条款太多/冲突时会被模型忽略</td></tr>
-    <tr><td>硬</td><td><b>权限规则</b>(settings.json 的 allow / ask / deny)</td><td>工具执行的闸门——<b>代码强制</b>,模型绕不过</td><td>配错就误伤:太松失去保护,太紧寸步难行</td></tr>
-    <tr><td>最硬</td><td><b>Hook</b></td><td>loop 事件上的确定性拦截,可审计、可改写、可否决</td><td>写错会卡死正常流程</td></tr>
-  </table>
-  <p>经验法则:<b>风格、流程用软约束;安全、危险操作用硬约束;能用硬就别用软</b>。
-     例:本项目「绝不写/改/删源码」写在 CLAUDE.md 里——是软约束,靠模型自觉遵守
-     (配合「课件与 CLAUDE.md 例外」白名单把范围收窄);如果某天要<b>保证</b>而不是<b>期望</b>,
-     就得加权限 deny 或 Hook——这就是软约束的边界。</p>
-
-  <h3>Rules 文件的层级(你机器上的三层实况)</h3>
-  <pre>企业策略(组织下发,最高优先级)
-  └─ 用户全局  ~/.claude/CLAUDE.md      ← 227 字节:你的个人偏好(Postman CLI 位置等)
-       └─ 项目     CLAUDE.md(进 git)   ← 13.7 KB:团队规范(架构/类型/课件规范)
-            └─ 子目录  CLAUDE.md          ← 深层模块的局部规矩,进入该目录才加载
-   外加:@import 把长文档拆出去(如 @doc/style.md);/memory 命令快速编辑;
-        AGENTS.md(开放标准)同样被读取;另有 Claude Code 的自动记忆(auto memory)</pre>
-  <p>规则:<b>逐层叠加、就近优先</b>——全局放个人偏好,项目放团队规范,都进同一条 prompt。
-     这套层级你已经在受益:模型此刻知道「全程中文」(全局层)也知道「参数必须标注」(项目层)。</p>
-
-  <h3>行业对照:各家方言,同一个思想</h3>
-  <table>
-    <tr><th>工具</th><th>Rules 文件</th><th>特色</th></tr>
-    <tr><td>Claude Code</td><td>CLAUDE.md(兼读 AGENTS.md)</td><td>层级叠加 + @import 拆分</td></tr>
-    <tr><td>Codex 等多家</td><td><b>AGENTS.md</b></td><td>2025 年起的开放标准,仓库通用</td></tr>
-    <tr><td>Cursor</td><td><code class="inline">.cursor/rules/*.mdc</code></td><td>frontmatter 配 <code class="inline">globs</code>:命中哪些文件才生效——<b>条件触发的半按需 rules</b>(又是渐进披露!)</td></tr>
-    <tr><td>GitHub Copilot</td><td><code class="inline">.github/copilot-instructions.md</code></td><td>仓库级指令</td></tr>
-    <tr><td>Aider</td><td>CONVENTIONS.md</td><td>这一潮流的鼻祖之一</td></tr>
-  </table>
-  <p>趋同点一眼可见:<b>仓库里的 Markdown 就是给 AI 的章程</b>。你写项目 CLAUDE.md 练的不是某家工具的用法,
-     是整个行业的通用做法——以后换任何 agent 工具,这套习惯直接平移。</p>
-
-  <h3>权限规则:硬约束的写法</h3>
-  <p>权限写在 <code class="inline">.claude/settings.json</code>(团队,进 git)或
-     <code class="inline">.claude/settings.local.json</code>(个人,不进 git)。你项目里现在就有真实配置:</p>
-  <pre>{
-  <span class="s">"permissions"</span>: {
-    <span class="s">"allow"</span>: [
-      <span class="s">"Bash(arkcli auth *)"</span>,                                <span class="c">// arkcli 认证命令免确认</span>
-      <span class="s">"Bash(git log --oneline -8 ...)"</span>                      <span class="c">// 看日志免确认</span>
-    ]
+  @media (max-width: 700px) {
+    header.hero { padding: 36px 20px 28px; }
+    main { padding: 8px 18px 56px; }
+    .toc ol { grid-template-columns: 1fr; }
+    table { display: block; overflow-x: auto; }
+    table tbody { display: table; min-width: 620px; width: 100%; }
+    table.wide tbody { min-width: 850px; }
+    pre { padding: 14px; font-size: 12px; }
   }
-}
-
-<span class="c">// 规则语法 = 工具(限定模式):</span>
-{
-  <span class="s">"permissions"</span>: {
-    <span class="s">"allow"</span>: [<span class="s">"Bash(uv run ruff *)"</span>, <span class="s">"Read(doc/**)"</span>],      <span class="c">// 放行:常用安全命令</span>
-    <span class="s">"ask"</span>:   [<span class="s">"Bash(git push *)"</span>],                          <span class="c">// 每次人工确认</span>
-    <span class="s">"deny"</span>:  [<span class="s">"Read(.env)"</span>, <span class="s">"Read(**/secrets/**)"</span>]         <span class="c">// 直接拒绝:秘密文件</span>
+  @media print {
+    body { color: #000; }
+    header.hero { padding: 20px 0; }
+    main { max-width: none; padding: 0; }
+    .toc { display: none; }
+    section { break-inside: avoid-page; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #000; background: #f3f3f3; }
+    pre .c, pre .k, pre .s { color: #000; }
+    details > * { display: block; }
   }
-}</pre>
-  <p>读法:<code class="inline">allow</code> 免问、<code class="inline">ask</code> 弹窗确认、<code class="inline">deny</code> 直接拒绝。
-     你平时看到的「允许运行这个命令吗」弹窗,就是这条配置面的运行时形态——同类命令弹烦了,
-     就把它写进 allow(本机的 arkcli 规则就是这么来的)。</p>
 
-  <h3>写好 rules 的五条实践(本项目现身说法)</h3>
-  <ol>
-    <li><b>命令式、可判定</b>:「参数必须标注,返回类型省略」是好条款——能逐条对照执行;
-        「注意代码质量」是废话——模型只能敷衍。</li>
-    <li><b>正面指令优先</b>:说「要做什么」比「别做什么」管用;禁令难免时要具体
-        (「绝不写 app/scripts/配置」比「别乱动文件」强)。</li>
-    <li><b>放对层级</b>:个人偏好进全局,团队规范进项目仓库——进 git 意味着可 review、可演进,
-        本项目 CLAUDE.md 的「类型规范」节就是团队规范长在仓库里的形状。</li>
-    <li><b>省着用</b>:rules <b>常驻</b>上下文,每条都是每轮的 token 成本。长文档用 @import 拆走,
-        「按需才用得上的方法」挪去 SKILL——常驻 vs 按需,又是那道 token 经济题。</li>
-    <li><b>软硬结合</b>:条款写进 rules(模型知道),执行靠权限/Hook 兜底(系统保证)——两层都到位才闭环。</li>
-  </ol>
 
-  <div class="box think">
-    <b class="t">辨析:同一件事放对地方</b>
-    <b>章程常驻(Rules 文件)、方法按需(SKILL)、闸门硬来(权限规则)、拦截到点(Hook)</b>。
-    例:「不许 push 到 main」——写 CLAUDE.md 是提醒,写 deny 是保证;
-    「删库前必须人工确认」——ask 规则挡一道 + Hook 审计一道,双保险。
-  </div>
-</section>
 
-<!-- ============ 08 ============ -->
-<section>
-  <h2><span class="no">08</span>动手:写一个最小的 SKILL 并让它真实触发</h2>
-
-  <p>现在轮到你了。目标:写一个叫 <code class="inline">py-hand-check</code> 的个人 skill——
-     「Python 代码自查手册」,内容就按<b>你自己的手滑史</b>定制(拼写 contet/emial、类型标注、验证步骤)。
-     学完它就是你以后写代码的自动质检员。全程只动 <code class="inline">~/.claude/skills/</code>,不碰项目源码。</p>
-
-  <div class="steps">
-
-    <div class="step">
-      <h3>认现场</h3>
-      <p>先看看你机器上已经有什么:</p>
-      <pre>ls ~/.claude/skills/
-find ~/.claude/skills/byted-web-search -type f   <span class="c"># 看一个标准 skill 的结构</span></pre>
-      <p><b>观察点</b>:26 个 arkcli-* + byted 两个;byted-web-search 是标准三段式
-         (SKILL.md + scripts/ + references/)。这就是你接下来要模仿的形状。</p>
-    </div>
-
-    <div class="step">
-      <h3>建目录 + SKILL.md</h3>
-      <pre>mkdir -p ~/.claude/skills/py-hand-check/scripts</pre>
-      <p>创建 <code class="inline">~/.claude/skills/py-hand-check/SKILL.md</code>,全文如下(可直接抄,建议读一遍再抄——每行都有讲究):</p>
-      <pre>---
-name: py-hand-check
-description: Python 代码自查清单。写完或改完任何 Python 代码后、或被要求检查/审查代码时使用。检查项:变量拼写手滑(如 contet/emial/DATATBASE_URL)、函数参数类型标注、泛型参数化(dict/list 不裸写)、改动后是否跑了 ruff 与 mypy 验证。
----
-
-# py-hand-check:Python 代码自查清单
-
-## 第一步:拼写扫描(确定性的事,交给脚本)
-
-对目标文件运行扫描脚本:
-
-    bash ~/.claude/skills/py-hand-check/scripts/check_typos.sh &lt;文件...&gt;
-
-脚本只找已知手滑词。有输出 = 发现手滑,逐条改掉;输出「通过」则继续。
-
-## 第二步:人工检查(需要判断的事,模型来)
-
-按顺序核对:
-
-1. **拼写与命名**:变量名是否手滑(重点:contet → content、emial → email、
-   DATATBASE → DATABASE)。命名风格与所在文件既有风格一致。
-2. **参数类型标注**:推不出类型的参数必须标;`dict` / `list` 裸写不行,要参数化
-   (如 `dict[str, object]`);返回类型不写。
-3. **Any 边界**:json.loads / 外部响应的 Any 结果必须就近收窄
-   (isinstance + cast,或 pydantic 建形状),禁止链式裸取。
-
-## 第三步:验证(不可跳过)
-
-    ruff check &lt;改过的文件&gt;
-    mypy &lt;改过的文件&gt;
-
-两条都绿了才算完。跳过验证 = 本次检查不合格。
-
-## 输出格式
-
-按「✅/❌ 检查项 → 位置 → 建议」列表汇报,最后一行给结论。</pre>
-      <p><b>讲解</b>:① description 同时写了「做什么」(自查清单)和「什么时候用」
-         (写完/改完代码后、被要求检查时)——这是路由键,一字值千金;
-         ② 正文第一步把机械活推给脚本、第二步才是模型的判断活——「确定交给代码,模糊交给模型」;
-         ③ 检查项直接取自你项目的真实规范——<b>skill 就是这么沉淀个人/团队规范的</b>。</p>
-    </div>
-
-    <div class="step">
-      <h3>写脚本</h3>
-      <p>创建 <code class="inline">~/.claude/skills/py-hand-check/scripts/check_typos.sh</code>:</p>
-      <pre>#!/usr/bin/env bash
-# 已知手滑词扫描:命中则打印行号并退出 1,通过则退出 0
-TYPOS="contet|emial|DATATBASE|retrun|lenght|publich"
-
-if [ $# -eq 0 ]; then
-    echo "用法: check_typos.sh &lt;文件...&gt;"
-    exit 2
-fi
-
-matches=$(grep -nE "$TYPOS" "$@")
-if [ -n "$matches" ]; then
-    echo "$matches"
-    echo "发现手滑词 ↑"
-    exit 1
-else
-    echo "拼写扫描通过"
-fi</pre>
-      <p>加执行权限并自测:</p>
-      <pre>chmod +x ~/.claude/skills/py-hand-check/scripts/check_typos.sh
-echo "contet = 1" &gt; /tmp/typo_demo.py
-bash ~/.claude/skills/py-hand-check/scripts/check_typos.sh /tmp/typo_demo.py   <span class="c"># 期望:命中并 exit 1</span></pre>
-      <p><b>讲解</b>:注意 exit code 的语义设计——0 通过、1 发现问题、2 用法错误。
-         agent 看 exit code 就知道走哪条分支,<b>这就是 03 节说的「CLI 是 agent 友好接口」的全部含义</b>。</p>
-    </div>
-
-    <div class="step">
-      <h3>触发方式 A:显式调用</h3>
-      <p><b>开一个全新的 Claude Code 会话</b>(skill 清单在会话启动时注入),输入:</p>
-      <pre>/py-hand-check</pre>
-      <p>它会把 skill 正文当成指令载入。给它一个靶子:</p>
-      <pre>/py-hand-check 检查 /tmp/typo_demo.py</pre>
-      <p><b>观察点</b>:它应该先跑 <code class="inline">check_typos.sh</code>,然后按清单逐项汇报。
-         如果它问「允许运行 bash 命令吗」——这就是权限闸门(06 节表格里的最后一行)在工作。</p>
-    </div>
-
-    <div class="step">
-      <h3>触发方式 B:自动路由</h3>
-      <p>再开一个新会话,这次<b>不点名 skill</b>:</p>
-      <pre>帮我自查一下 /tmp/typo_demo.py,看看有没有问题</pre>
-      <p><b>观察点</b>:它应该自己决定翻开 py-hand-check(因为你的请求和 description 匹配)。
-         它会告诉你它用了什么 skill;若没有,说明 description 的「何时用」写得不够命中——下一节实验会系统验证这件事。</p>
-    </div>
-  </div>
-
-  <div class="box warn">
-    <b class="t">清理与坑</b>
-    全部练完想删除:<code class="inline">rm -rf ~/.claude/skills/py-hand-check</code> 即可,无副作用。
-    常见坑:① 忘了开<b>新会话</b>——旧会话的 skill 清单是启动时注入的,新建的 skill 在旧会话里不存在;
-    ② frontmatter 的 <code class="inline">---</code> 必须顶格、必须成对;③ description 别写成一句空话,
-    「做什么 + 何时用」缺一不可。
-  </div>
-</section>
-
-<!-- ============ 09 ============ -->
-<section>
-  <h2><span class="no">09</span>思考题(含详解)</h2>
-
-  <details>
-    <summary>Q1 · SKILL 的 description 和 MCP 工具的 description,都在帮模型做选择,本质区别是什么?</summary>
-    <p><b>详解</b>:两者都是「给模型的信号」,但<b>经济模型完全不同</b>。</p>
-    <p>MCP 工具的 description 挂在 schema 上,<b>每轮都参与</b>工具选择——模型每一步都要在全部工具简历里挑一个,
-       所以简历必须常驻、必须写好,数量一多就稀释注意力(SKILL 一节开头说的代价)。</p>
-    <p>SKILL 的 description 是<b>一次性的路由决策</b>:只在「要不要翻开这本手册」时被比对,
-       翻开之后正文接管,没翻开就只花那几十个 token 的元数据成本。</p>
-    <p>一句话:工具 description 是<b>常驻的选票</b>,skill description 是<b>按需的目录页</b>。
-       这就是「渐进式披露」在 token 经济上的意义——L9 上下文工程的所有技巧,都是在做同一道题。</p>
-  </details>
-
-  <details>
-    <summary>Q2 · 三个需求,各选什么载体?① 给 agent 接入公司 Jira;② 沉淀团队的 Python 代码规范;③ 让 agent 能查快递——快递公司已有成熟 CLI。</summary>
-    <p><b>详解</b>:</p>
-    <p>① <b>MCP server</b>。外部系统、多 host 复用、需要标准化的连接与鉴权——教科书场景。
-       (顺带:Jira 官方就有 MCP server,先找现成的,再考虑自己包。)</p>
-    <p>② <b>SKILL</b>。这是纯粹的程序性知识——没有「连接」任何外部系统,只是「怎么写代码」的方法论。
-       放 <code class="inline">.claude/skills/</code>(项目级)让团队共享,或插件分发。</p>
-    <p>③ <b>直接 Bash 跑 CLI</b>,三个都不用做。机器接口已经完备(stdin/exit code),
-       包一层 MCP 或 skill 都是多余——MCP 的价值在标准化复用,CLI 已经是事实标准了。
-       值得做的只是:在 CLAUDE.md 或 skill 里写一句「查快递用 xxx CLI,参数这样传」,
-       把<b>用法知识</b>补上,而能力本身不包装。</p>
-    <p>判别标准汇总:<b>要连接外部系统且多方复用 → MCP;要沉淀方法与规范 → SKILL;机器接口已完备 → 裸 CLI。</b></p>
-  </details>
-
-  <details>
-    <summary>Q3 · CLAUDE.md 和 SKILL.md 都是 Markdown、都会进上下文,区别在哪?</summary>
-    <p><b>详解</b>:三个维度。</p>
-    <p><b>装载时机</b>:CLAUDE.md 常驻(每次会话启动必注入);SKILL 正文按需(和任务相关才翻开)。
-       所以 CLAUDE.md 要短、要金贵——它是你最贵的 token 地产;SKILL 可以长——反正不常用不付费。</p>
-    <p><b>内容性质</b>:CLAUDE.md 回答「我是谁、这里的规矩是什么」(人格、约定、边界);
-       SKILL 回答「做某件事的流程是什么」(程序性知识)。</p>
-    <p><b>与 L8 的关系(重点)</b>:CLAUDE.md 本质上是<b>人类手写的、静态的长期记忆</b>——
-       你把「用户手滑模式」写进 CLAUDE.md,就是手动完成了一次「提取 → 存储 → 注入」。
-       L8 要做的事,是把这三个环节自动化:让 bot 自己从对话里提取记忆、存进 memories 表、
-       每轮自动注入 system。<b>CLAUDE.md 之于 Claude Code,就是你 L8 的 memories 表之于你的 bot。</b></p>
-  </details>
-
-  <details>
-    <summary>Q4 · 设计题:把你的 TOOLS_SCHEMA 改成「skill 式」两级加载,数据结构和流程怎么改?有什么坑?</summary>
-    <p><b>详解</b>:方向性方案(不是让你现在改代码,进 L9 时会回来用):</p>
-    <pre><span class="c"># 现在:全量常驻</span>
-TOOLS_SCHEMA: list[ToolParam]            <span class="c"># 每轮整张简历表都发</span>
-
-<span class="c"># skill 式:两级</span>
-TOOLS_INDEX: list[ToolCard]              <span class="c"># 常驻层:仅 name + 一句话简介</span>
-_TOOL_DETAIL: dict[str, ToolParam]       <span class="c"># 仓库层:完整 JSON Schema</span>
-
-<span class="c"># 再注册一个元工具,让模型按需取详情:</span>
-<span class="c">#   get_tool_detail(name) -&gt; str   (从 _TOOL_DETAIL 里查,返回 schema JSON)</span></pre>
-    <p>流程:每轮只发 <code class="inline">TOOLS_INDEX</code> → 模型想用某工具时先调
-       <code class="inline">get_tool_detail</code> 拿参数定义 → 再正式调用。</p>
-    <p><b>坑(想清楚这三条才算想清楚)</b>:① 多了一次往返,延迟和轮次成本上升——工具少时是纯亏,
-       所以这是「工具多到一定规模才启用」的策略;② 模型可能<b>不查详情就瞎猜参数</b>——
-       必须在 ToolCard 的一句话简介里写死「调用前必须先 get_tool_detail」,用提示词约束;
-       ③ <code class="inline">execute_tool</code> 的必填校验(<code class="inline">_validate_required</code>)
-       目前依赖 TOOLS_SCHEMA 全量在场,拆表后它得改查 <code class="inline">_TOOL_DETAIL</code>——
-       <b>改合同要同步改所有使用侧</b>,你在 L5 就吃过 MessageDict 漏改的亏,这里同理。</p>
-  </details>
-</section>
-
-<!-- ============ 10 ============ -->
-<section>
-  <h2><span class="no">10</span>验证实验</h2>
-
-  <div class="steps">
-    <div class="step">
-      <h3>实验一:description 对照实验(证明「路由键」)</h3>
-      <p>① 新会话,问「帮我检查 /tmp/typo_demo.py 这段 Python 代码」→ 观察 py-hand-check 被自动触发。</p>
-      <p>② 把 SKILL.md 的 description 改成一句含糊的话:</p>
-      <pre>description: 一个工具。</pre>
-      <p>③ <b>新开会话</b>,问一模一样的问题 → 观察自动触发失灵(它不知道「检查代码」该翻这本手册)。</p>
-      <p>④ 改回原文,再验证恢复。</p>
-      <p><b>结论</b>:自动触发完全依赖 description——元数据就是路由表,正文写得再好,路由失败就没人翻。</p>
-    </div>
-
-    <div class="step">
-      <h3>实验二:headless 用法 + 结构化输出</h3>
-      <pre>claude -p <span class="s">"列出你当前能看到的 skill 名字,一行一个"</span> --output-format json | head -30</pre>
-      <p><b>观察点</b>:① 输出是 JSON(结果文本 + 耗时/用量字段)——这就是 agent 被当「管道节点」用的样子;
-         ② 结果里应该能找到 py-hand-check 和那些 arkcli-*——L1 元数据确实常驻在 system prompt 里。
-         对比:跑一次 <code class="inline">claude -p "1+1=?"</code>,看用量字段,
-         感受一下「常驻元数据」本身也是每轮的固定成本。</p>
-    </div>
-
-    <div class="step">
-      <h3>实验三:MCP 现状盘点</h3>
-      <pre>claude mcp list        <span class="c"># 项目根目录下跑</span></pre>
-      <p>以及在交互会话里输入 <code class="inline">/mcp</code>。</p>
-      <p><b>观察点</b>:列出你已配置的 MCP server(本机目前挂着搜索、数据检索、VS Code 等几个),
-         每个下面是它的工具清单。对照 04 节:这就是「host 已经替你当好了」——
-         你在 L7 手写的 McpClient 三连,每天都被 Claude Code 在后台跑无数遍。</p>
-    </div>
-
-    <div class="step">
-      <h3>实验四(选做):脚本化的确定性</h3>
-      <p>往 /tmp/typo_demo.py 里再加一个手滑词(比如 <code class="inline">retrun</code>),
-         再走一遍自动触发。观察它<b>先跑脚本</b>拿到精确行号、<b>再做人judgment</b>——
-         两层分工和 05 节讲的完全一致。把 SKILL.md 第一步删掉再试,对比它是否开始「肉眼找 bug」——
-         没了脚本,确定性的活也落回模型头上,又慢又不可靠。</p>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 11 ============ -->
-<section>
-  <h2><span class="no">11</span>对比小结</h2>
-
-  <table>
-    <tr><th>概念</th><th>本质</th><th>装载时机</th><th>解决什么</th><th>你项目的对应物</th><th>路线图</th></tr>
-    <tr><td>CLI 工具</td><td>进程外可执行程序,文本接口 + exit code</td><td>调用时</td><td>让 agent 有手</td><td>scripts/*.py、l7_mcp_server 子进程</td><td>全程在用</td></tr>
-    <tr><td>MCP server</td><td>JSON-RPC 标准协议的能力插座</td><td>启动发现,schema 常驻</td><td>N×M → N+M,生态复用</td><td>McpClient + register_mcp_tools</td><td>L7 ✅;传输进阶 = 机动</td></tr>
-    <tr><td>SKILL</td><td>程序性知识包(手册 + 脚本)</td><td>元数据常驻,正文/附件按需</td><td>know-how 复用 + 上下文经济</td><td>TOOLS_SCHEMA 常驻模式是它的反面参照</td><td>思想 → L9</td></tr>
-    <tr><td>Hook</td><td>loop 事件上的确定性拦截点</td><td>不进上下文</td><td>硬约束、审计、自动化</td><td>(本课会话里亲眼见过两次)</td><td>思想 → L12 审批</td></tr>
-    <tr><td>子 Agent</td><td>独立上下文的 agent 实例</td><td>仅结论回主上下文</td><td>上下文隔离、并行</td><td>—(将写)</td><td>L11</td></tr>
-    <tr><td>插件</td><td>skills+hooks+agents+MCP 打包分发</td><td>安装时</td><td>生态分发</td><td>arkcli-* 托管 26 个</td><td>机动</td></tr>
-    <tr><td>CLAUDE.md</td><td>声明式指令与人肉记忆</td><td>会话启动常驻</td><td>人格、规范、背景</td><td>本项目正被两份 CLAUDE.md 约束着</td><td>思想 → L8</td></tr>
-  </table>
-
-  <p>三句话收束全课:</p>
-  <ol>
-    <li>所有概念都长在你写过的那个 agentic loop 上——<b>生态没有新大陆,只有对同一公式不同环节的标准化封装</b>。</li>
-    <li>选型判别:<b>接系统 → MCP;沉淀方法 → SKILL;接口已好 → 裸 CLI;怕上下文脏 → 子 Agent;定规矩 → Rules(章程软)+ 权限/Hook(底线硬)。</b></li>
-    <li>所有取舍的主轴是同一个:<b>token 经济</b>——常驻贵而稳,按需省而险。这也是 L8/L9 的主轴。</li>
-  </ol>
-</section>
-
-<!-- ============ 12 ============ -->
-<section>
-  <h2><span class="no">12</span>进阶预告</h2>
-  <ul>
-    <li><b>L8 长期记忆(下一课)</b>:CLAUDE.md 是「人手写的记忆注入」;L8 让你的 bot 自己完成
-        提取(LLM 结构化抽取)→ 存储(memories 表)→ 注入(system prompt)。本课 Q3 已把桥梁搭好。</li>
-    <li><b>L9 上下文工程</b>:工具结果裁剪、token 预算、历史摘要压缩——把 Q4 的两级加载思想落到生产。</li>
-    <li><b>机动专题 · MCP 传输进阶</b>:Streamable HTTP(2026-07-28 规范的无状态化方向),
-        你 L7 的 stdio JSON-RPC 知识直接平移。</li>
-    <li><b>L11 子 Agent / L12 审批</b>:把本课的「上下文隔离」「hook 硬约束」自己裸写一遍。</li>
-  </ul>
-  <p>本课之后,你在生态里的身份变了:L7 你是 MCP host 的作者,本课后你是 SKILL 的作者——
-     两票在手,进 L8。</p>
-</section>
-
-</main>
-
-<footer>
-  study-fastapi · T1 专题课 · Agent 生态地图:SKILL / MCP / CLI · 2026-10
-</footer>
-
-</body>
-</html>
+  .file-label {font:600 14px/1.5 ui-monospace,monospace; color:var(--accent); margin-top:24px; overflow-wrap:anywhere;}
+  .flow {border:1px solid var(--line); background:var(--soft); color:var(--ink); white-space:pre-wrap;}
+  .lesson-nav {display:flex;flex-wrap:wrap;gap:8px 16px;margin:16px 0;}
+  .lesson-nav a {padding:4px 8px;border:1px solid var(--line);border-radius:6px;text-decoration:none;}
+  .table-wrap {overflow-x:auto;}
+  .table-wrap table {min-width:620px;}
+  @media print {section {break-inside:auto;} h2,h3,.file-label {break-after:avoid;}}
+</style></head><body>
+<header class="hero"><div class="kicker">AGENT 开发 · 专题课 T1</div><h1>Agent 生态总览</h1><p>先建立一张能落到代码上的地图，再按 CLI → MCP → SKILL → Rules 深入。总览只解释分工和联系，完整实现放进四份独立课件。</p></header>
+<main><nav class="lesson-nav" aria-label="专题课导航"><a href="../T1/t1_agent_ecosystem.html">T1 · Agent 生态总览</a><a href="../T2/t2_cli_executor.html">T2 · CLI 与工具执行器</a><a href="../T3/t3_mcp_protocol.html">T3 · MCP 协议与能力接入</a><a href="../T4/t4_skill_loader.html">T4 · SKILL 与按需加载</a><a href="../T5/t5_rules_execution.html">T5 · Rules 与执行边界</a></nav><nav class="toc" aria-label="本课目录"><h2>本课目录</h2><ol><li><a href="#part-1">本课目标</a></li><li><a href="#part-2">背景回顾：现有项目的调用链</a></li><li><a href="#part-3">原理：四种机制各自负责什么</a></li><li><a href="#part-4">动手：沿一次调用定位边界</a></li><li><a href="#part-5">思考题与详解</a></li><li><a href="#part-6">验证实验：用可观测结果说明能力</a></li><li><a href="#part-7">对比小结：实现时抓住三个问题</a></li><li><a href="#part-8">进阶预告与阅读顺序</a></li></ol></nav><section id="part-1"><h2><span class="no">01</span>本课目标</h2><p>能够沿着一次请求说清：谁提供能力、谁加载知识、谁作出调用决定、谁真正执行、谁可以拒绝执行。用已有 L4～L7 代码作基座，不引入 Agent 框架。</p><div class="box ok"><b class="t">练习方式</b>本课代码是供你亲手输入的教学内容。Agent 维护 doc/ 课件；app/、scripts/ 和配置由你自己创建或修改。先运行独立实验，再按接入说明修改主项目。代码中的演示工具与目录均会明确标注，不把实验结果当作模型端到端验收。</div></section><section id="part-2"><h2><span class="no">02</span>背景回顾：现有项目的调用链</h2><pre class="flow">routers/chats.py
+  → build_llm_messages(history)
+  → run_agent / run_agent_stream
+  → get_all_tool_schemas → llm_client
+  → 模型返回 tool_call(name, arguments)
+  → execute_tool → 内置函数 / McpClient.call_tool
+  → 工具结果绑定 tool_call_id → 下一轮模型
+  → new_stored 整轮轨迹由 router 写库</pre><p>SDK 类型集中在 services/llm/ 与 agent.py；tools.py 接收工具名与 JSON 参数字符串，返回字符串。跨进程边界仍要校验输入形状。轨迹写库是整轮语义单元，不能因为加一项扩展就把数据库连接包到模型等待外面。</p></section><section id="part-3"><h2><span class="no">03</span>原理：四种机制各自负责什么</h2><div class="table-wrap"><table><tr><th>主题</th><th>入口与产物</th><th>对 Agent 的作用</th><th>实现所在位置</th></tr><tr><td>CLI</td><td>参数列表 → 进程 → stdout/stderr/退出码</td><td>执行一项具体操作</td><td>工具执行器</td></tr><tr><td>MCP</td><td>握手、发现、请求/响应</td><td>统一访问 tools/resources/prompts</td><td>host 内的 client 与独立 server</td></tr><tr><td>SKILL</td><td>元数据索引 → 操作手册 → 引用/脚本</td><td>组织可复用的操作知识</td><td>上下文构造器与按需读取工具</td></tr><tr><td>Rules</td><td>适用规则文本 + 执行策略</td><td>告诉模型约定,在执行边界检查权限</td><td>上下文层与执行闸门分别实现</td></tr></table></div><p>这些机制可以组合：Skill 写“先读使用说明，再检索知识库”；host 从 MCP resource 读取说明；模型选择检索 tool；server 内部可以调用 CLI；真正执行前由 host 检查策略。MCP 不负责决定全部内容何时进入模型，Skill 文件也不会自行执行。</p></section><section id="part-4"><h2><span class="no">04</span>动手：沿一次调用定位边界</h2><pre><code>rg -n &#x27;build_llm_messages|run_agent|append_messages&#x27; app/routers/chats.py
+rg -n &#x27;get_all_tool_schemas|execute_tool|tool_call_id&#x27; app/services/agent.py
+rg -n &#x27;register_mcp_tools|_mcp_call|TOOL_REGISTRY&#x27; app/services/tools.py
+rg -n &#x27;start|tools/list|tools/call|_recv&#x27; app/services/mcp/client.py</code></pre><p>按顺序打开命中的函数,写下每一步输入和输出。尤其区分模型提出调用与 Python 真正执行：生成 tool_calls 不等于操作已完成。再检查两种 agent loop，确认新的能力不会只接到非流式路径。</p></section><section id="part-5"><h2><span class="no">05</span>思考题与详解</h2><details><summary>一个 Skill 能否直接替代 execute_tool？</summary><p>不能。手册可以描述步骤,但执行器负责实际 I/O、参数检查和结果。把说明放进上下文不会自动获得程序权限。</p></details><details><summary>为什么不把四课合成一个“大插件课”？</summary><p>四者的故障边界不同。CLI 看进程与输出,MCP 看协议与连接,Skill 看发现和上下文,Rules 看规则来源与执行授权。分开实验更容易定位失败。</p></details><details><summary>模型没有遵守规则,是否代表规则文件没加载？</summary><p>不一定。先验证加载结果和注入位置,再观察模型遵循情况。规则文本影响生成行为,执行闸门则直接决定回调会不会运行。</p></details></section><section id="part-6"><h2><span class="no">06</span>验证实验：用可观测结果说明能力</h2><div class="table-wrap"><table><tr><th>课件</th><th>最小实验</th><th>验收证据</th></tr><tr><td>T2</td><td>实际启动子进程并制造失败</td><td>退出码、输出、超时和取消结果</td></tr><tr><td>T3</td><td>stdio 传输三类原语</td><td>请求 id 对应,协议错误与业务错误可区分</td></tr><tr><td>T4</td><td>扫描元数据再读取正文</td><td>索引无正文标记,显式加载后才有</td></tr><tr><td>T5</td><td>先请求再人工决定审批</td><td>批准前执行次数不增加,拒绝后仍不执行</td></tr></table></div><p>独立实验不用真实模型,便于重复验证机制。接入 FastAPI 后还需真实模型与 SSE 验证,两类证据分别记录。</p></section><section id="part-7"><h2><span class="no">07</span>对比小结：实现时抓住三个问题</h2><p>每个扩展都要说明它的数据合同、生命周期和失败出口。只有文本约定不足以保证外部操作安全；只有协议成功也不足以证明业务成功；只有文件存在更不等于它已进入模型上下文。</p><div class="table-wrap"><table><tr><th>周边概念</th><th>与四课的联系</th></tr><tr><td>子 Agent</td><td>独立 messages 与循环,在 L11 深入；可加载自己的 Skill 与规则。</td></tr><tr><td>Hook</td><td>特定事件上的回调；T5 用执行前后回调演示,具体产品的事件与阻断能力各异。</td></tr><tr><td>插件</td><td>分发单元,可组合 Skill、MCP 和其他配置；安装与运行权限是两回事。</td></tr></table></div></section><section id="part-8"><h2><span class="no">08</span>进阶预告与阅读顺序</h2><p>依次学习上方导航中的 T2、T3、T4、T5。四课各有完整代码、函数解释和验证步骤,可独立查阅。主线 L8～L16 编号不变；进入 L8 前仍要完成 C3 盘点。</p></section></main><footer>study-fastapi · T1 · 2026-10-21 · 纯 HTML / 离线可读</footer></body></html>
