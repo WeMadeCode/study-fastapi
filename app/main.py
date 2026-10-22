@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -6,7 +7,7 @@ from app.config.config import settings
 from app.database.redis_client import redis_client
 from app.routers import chats, news, posts, users
 from app.services.mcp.client import mcp_client
-from app.services.tools import register_mcp_tools
+from app.services.tools import initialize_skills, register_mcp_tools
 
 
 @asynccontextmanager
@@ -15,6 +16,10 @@ async def lifespan(_: FastAPI):
     if settings.mcp_kb_server_cmd:
         tools = await mcp_client.start()
         register_mcp_tools(tools, mcp_client.call_tool)
+
+    skill_root = Path(__file__).resolve().parents[1] / "tutorial_skills"
+    initialize_skills(skill_root)
+
     yield  # ② 应用在这里"活着",服务所有请求
 
     # ③ 关闭段:收到 Ctrl+C / SIGTERM 后,跑一次

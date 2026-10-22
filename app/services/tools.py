@@ -7,6 +7,7 @@
 execute_tool 只负责查表/解 JSON/按 schema 验必填,参数解包下放给每个工具。
 """
 
+import asyncio
 import json
 import sys
 from collections.abc import Awaitable, Callable
@@ -20,6 +21,40 @@ from app.services.cli_executor import run_cli
 from app.services.llm.client import llm_client
 from app.services.mcp.client import McpToolMeta  # 顶部 import 区
 from app.services.rag import retriever
+from app.services.skills import SkillCard, build_index, load_skill, read_reference, scan_skills
+
+_skill_cards: dict[str, SkillCard] = {}
+
+
+def initialize_skills(root: Path):
+    global _skill_cards
+    _skill_cards = scan_skills(root)
+
+
+def get_skill_index():
+    return build_index(_skill_cards)
+
+
+async def _load_skill(args: dict[str, object]):
+    name = args.get("name")
+    if not isinstance(name, str):
+        return json.dumps({"error": "name 必须是字符串"}, ensure_ascii=False)
+    try:
+        body = await asyncio.to_thread(load_skill, _skill_cards, name)
+        return json.dumps({"name": name, "body": body}, ensure_ascii=False)
+    except (ValueError, OSError) as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
+
+
+async def _read_skill_reference(args: dict[str, object]):
+    name, relative = args.get("name"), args.get("relative")
+    if not isinstance(name, str) or not isinstance(relative, str):
+        return json.dumps({"error": "name/relative 必须是字符串"}, ensure_ascii=False)
+    try:
+        body = await asyncio.to_thread(read_reference, _skill_cards, name, relative)
+        return json.dumps({"name": name, "reference": relative, "body": body}, ensure_ascii=False)
+    except (ValueError, OSError) as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
 
 
 class TextStatsResult(BaseModel):
@@ -162,19 +197,54 @@ TOOL_REGISTRY: dict[str, ToolFunc] = {
     "search_knowledge_base": _search_knowledge_base,
 }
 TOOL_REGISTRY["text_stats"] = _text_stats
-TOOLS_SCHEMA.append({
-    "type": "function",
-    "function": {
-        "name": "text_stats",
-        "description": "通过独立 CLI 精确统计原文的 Unicode 码点数，最多 1000 个码点。",
-        "parameters": {
-            "type": "object",
-            "properties": {"text": {"type": "string", "description": "原文，不要改写"}},
-            "required": ["text"],
+TOOLS_SCHEMA.append(
+    {
+        "type": "function",
+        "function": {
+            "name": "text_stats",
+            "description": "通过独立 CLI 精确统计原文的 Unicode 码点数，最多 1000 个码点。",
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string", "description": "原文，不要改写"}},
+                "required": ["text"],
+            },
         },
-    },
-})
+    }
+)
 
+# 加在现有 TOOL_REGISTRY 与 TOOLS_SCHEMA 初始化之后。
+TOOL_REGISTRY.update({"load_skill": _load_skill, "read_skill_reference": _read_skill_reference})
+TOOLS_SCHEMA.extend(
+    [
+        {
+            "type": "function",
+            "function": {
+                "name": "load_skill",
+                "description": "读取可用 Skill 索引中的操作手册。先加载手册再按步骤执行。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string", "description": "索引中的 Skill 名称"}},
+                    "required": ["name"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_skill_reference",
+                "description": "读取已发现 Skill 的 references 文档。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Skill 名称"},
+                        "relative": {"type": "string", "description": "如 references/types.md"},
+                    },
+                    "required": ["name", "relative"],
+                },
+            },
+        },
+    ]
+)
 # MCP 外接工具:name → 简历。启动时由 lifespan 注入,同名覆盖内置(外接视为最新版本,内置兜底)
 _mcp_schemas: dict[str, McpToolMeta] = {}
 # MCP 调用通道:与 ToolFunc 同形(合同同形),所以执行侧可以统一

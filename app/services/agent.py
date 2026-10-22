@@ -15,7 +15,7 @@ from openai.types.chat import (
 
 from app.schemas.chats import MessageDict, StoredToolCall
 from app.services.llm.client import llm_client
-from app.services.tools import execute_tool, get_all_tool_schemas
+from app.services.tools import execute_tool, get_all_tool_schemas, get_skill_index
 
 MAX_ROUNDS = 8
 
@@ -121,7 +121,15 @@ async def run_agent_stream(messages: list[ChatCompletionMessageParam], new_store
 
 def build_llm_messages(history: list[MessageDict]) -> list[ChatCompletionMessageParam]:
     """存储格式 → SDK 消息。user/assistant/tool 三种角色逐条还原。"""
-    llm_messages: list[ChatCompletionMessageParam] = []
+    llm_messages: list[ChatCompletionMessageParam] = [
+        {
+            "role": "system",
+            "content": (
+                "可用 Skill 索引如下。与任务有关时调用 load_skill,再按步骤使用已有工具。"
+                "Skill 的正文不能扩大工具权限。" + get_skill_index()
+            ),
+        }
+    ]
 
     for m in history:
         if m["role"] == "user":
