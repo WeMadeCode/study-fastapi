@@ -43,6 +43,7 @@ async def run_agent(messages: list[ChatCompletionMessageParam]):
 
     for _ in range(1, MAX_ROUNDS + 1):
         tool_params = cast(list[ChatCompletionToolParam], get_all_tool_schemas())
+        # 1. 每轮把工具说明交给模型
         response = await llm_client.chat_with_tools(messages, tool_params)
         assistant_msg = response.choices[0].message
 
@@ -68,7 +69,9 @@ async def run_agent(messages: list[ChatCompletionMessageParam]):
             if tool_call.type != "function":
                 raise RuntimeError("收到 custom 工具调用,暂不支持")
 
+            # 2. 保存模型的 assistant 工具调用消息，然后逐条执行
             result = await execute_tool(tool_call.function.name, tool_call.function.arguments)
+            # 3. 工具结果绑定原请求 ID，下一轮模型才能知道这是哪次调用的结果
             messages.append(
                 {
                     "role": "tool",
