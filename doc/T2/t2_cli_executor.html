@@ -88,18 +88,76 @@
   .table-wrap table {min-width:620px;}
   @media print {section {break-inside:auto;} h2,h3,.file-label {break-after:avoid;}}
 </style></head><body>
-<header class="hero"><div class="kicker">AGENT 开发 · 专题课 T2</div><h1>CLI 与工具执行器</h1><p>把模型提出的工具调用变成一个可等待、可取消、可检查结果的子进程。重点是执行器合同，而不是命令行语法大全。</p></header>
-<main><nav class="lesson-nav" aria-label="专题课导航"><a href="../T1/t1_agent_ecosystem.html">T1 · Agent 生态总览</a><a href="../T2/t2_cli_executor.html">T2 · CLI 与工具执行器</a><a href="../T3/t3_mcp_protocol.html">T3 · MCP 协议与能力接入</a><a href="../T4/t4_skill_loader.html">T4 · SKILL 与按需加载</a><a href="../T5/t5_rules_execution.html">T5 · Rules 与执行边界</a></nav><nav class="toc" aria-label="本课目录"><h2>本课目录</h2><ol><li><a href="#part-1">本课目标</a></li><li><a href="#part-2">背景回顾：从 execute_tool 到进程</a></li><li><a href="#part-3">原理：进程合同与资源生命周期</a></li><li><a href="#part-4">动手实现：一份可独立运行的实验</a></li><li><a href="#part-5">接回工具注册表：具体改动位置</a></li><li><a href="#part-6">思考题与详解</a></li><li><a href="#part-7">验证实验</a></li><li><a href="#part-8">对比小结与进阶预告</a></li></ol></nav><section id="part-1"><h2><span class="no">01</span>本课目标</h2><p>亲手实现一个异步 CLI 执行器：传参不经 shell,同时读取 stdout/stderr,限制保留的输出,区分启动失败、非零退出、超时与取消。最后把它映射到 TOOL_REGISTRY。</p><div class="box ok"><b class="t">练习方式</b>本课代码是供你亲手输入的教学内容。Agent 维护 doc/ 课件；app/、scripts/ 和配置由你自己创建或修改。先运行独立实验，再按接入说明修改主项目。代码中的演示工具与目录均会明确标注，不把实验结果当作模型端到端验收。</div></section><section id="part-2"><h2><span class="no">02</span>背景回顾：从 execute_tool 到进程</h2><p>现有 app/services/tools.py 的 execute_tool(name, arguments_json) 解析 JSON,检查必填键,优先分发 MCP,否则查 TOOL_REGISTRY。ToolFunc 的合同是异步函数接收 dict[str, object]、返回 str。新增 CLI 工具可以保持此合同,在内部启动程序。</p><pre class="flow">模型参数 text → _text_stats / text_stats → run_cli(argv)
-→ Python 子进程 → 机器结果 stdout + 诊断 stderr + returncode
-→ 业务适配器产生 JSON 字符串 → 原 tool_call_id 的 tool 消息</pre><p>现有 _validate_required 只检查键是否存在,不检查值的类型。示例会在读取 text 时用 isinstance 收窄。工具名由 host 注册,可执行文件和脚本路径也由 host 固定,不让模型传任意命令字符串。</p></section><section id="part-3"><h2><span class="no">03</span>原理：进程合同与资源生命周期</h2><div class="table-wrap"><table><tr><th>选择</th><th>原因</th><th>容易误解之处</th></tr><tr><td>create_subprocess_exec(*argv)</td><td>每个参数是独立字符串,不会把分号当作 shell 语句</td><td>它不等于沙箱；被调用的程序仍有自身权限与参数语义。</td></tr><tr><td>stdout/stderr 同时读取</td><td>任一管道写满都可能阻塞子进程</td><td>await proc.wait() 加一根未排空的 PIPE 可能僵住。</td></tr><tr><td>保留上限 + 继续排空</td><td>控制内存,同时允许子进程退出</td><td>StreamReader 的 limit 是缓冲阈值,不是总输出预算。</td></tr><tr><td>timeout + finally 回收</td><td>超时或取消不遗留正在运行的直接子进程</td><td>取消本身不是业务成功,不应被转成一段空结果。</td></tr><tr><td>退出码与业务结果分开</td><td>0 是进程层成功;业务 JSON 仍可能报告失败</td><td>非零退出时 stderr 有诊断价值,不可只返回 stdout。</td></tr></table></div><p>本例只管理直接子进程,要求演示 worker 不派生后代。真实 CLI 会启动其他进程时,需按操作系统设计进程组终止;不要把本例宣称为完整进程树监管器。输出截断也不等于停止工作量,持续输出还要靠运行时预算控制。</p><p class="muted">核对依据：<a href="https://docs.python.org/3.13/library/asyncio-subprocess.html">Python 3.13 异步子进程</a></p></section><section id="part-4"><h2><span class="no">04</span>动手实现：一份可独立运行的实验</h2><p>步骤一：创建 scripts/t2_cli_lab.py,完整代码如下。同一文件有 host 和 worker 两个入口：正常运行执行断言；加 --worker 则作为子进程处理参数。sys.executable 保证使用同一个 Python 环境。</p><p class="file-label">由你创建：scripts/t2_cli_lab.py</p><pre data-file="scripts/t2_cli_lab.py"><code>&quot;&quot;&quot;T2:由用户抄入 scripts/t2_cli_lab.py;本文件不依赖模型或数据库。&quot;&quot;&quot;
+<header class="hero"><div class="kicker">AGENT 开发 · 专题课 T2</div><h1>CLI 与工具执行器</h1><p>从一句用户请求出发，看见模型提出调用、宿主启动 CLI、工具结果回到模型的完整过程。</p></header>
+<main><nav class="lesson-nav" aria-label="专题课导航"><a href="../T1/t1_agent_ecosystem.html">T1 · Agent 生态总览</a><a href="../T2/t2_cli_executor.html">T2 · CLI 与工具执行器</a><a href="../T3/t3_mcp_protocol.html">T3 · MCP 协议与能力接入</a><a href="../T4/t4_skill_loader.html">T4 · SKILL 与按需加载</a><a href="../T5/t5_rules_execution.html">T5 · Rules 与执行边界</a></nav><nav class="toc" aria-label="本课目录"><h2>本课目录</h2><ol><li><a href="#part-1">本课目标：让 Agent 真正调用一次 CLI</a></li><li><a href="#part-2">背景回顾：模型、Agent 宿主与 CLI 各做什么</a></li><li><a href="#part-3">原理：专用工具怎样映射成命令</a></li><li><a href="#part-4">动手实现一：先做一个人也能使用的 CLI</a></li><li><a href="#part-5">动手实现二：宿主通过执行器启动 CLI</a></li><li><a href="#part-6">动手实现三：把 CLI 接到工具注册表</a></li><li><a href="#part-7">动手实现四：让真实模型驱动完整流程</a></li><li><a href="#part-8">思考题：沿调用边界解释原因</a></li><li><a href="#part-9">验证实验：正常、边界和失败路径</a></li><li><a href="#part-10">对比小结与进阶预告</a></li></ol></nav>
+<section id="part-1"><h2><span class="no">01</span>本课目标：让 Agent 真正调用一次 CLI</h2>
+<p>本课围绕一句请求展开：“请用工具统计‘你好世界’有多少个字符。”学完后，你能指出模型在哪一步提出请求、Python 宿主在哪一步启动程序，以及 CLI 的输出怎样成为下一轮模型的输入。然后再处理超时、输出预算和取消。</p>
+<div class="box ok"><b class="t">学习边界</b>以下文件与改动均由你亲手写入。课件只提供完整示例与验证命令。已有 scripts/t2_cli_lab.py 可以保留作旧实验；新流程不导入它，也不依赖它。所有命令默认在项目根目录执行。</div>
+</section>
+<section id="part-2"><h2><span class="no">02</span>背景回顾：模型、Agent 宿主与 CLI 各做什么</h2>
+<p>L4 的 function calling 让模型生成工具名称与 JSON 参数；L5 的 agentic loop 负责执行请求，再把结果交回模型。模型本身没有操作系统进程句柄。这里把运行 agent.py、tools.py 的 Python 程序称为“宿主”；Agent 系统由模型、宿主循环和可用工具共同组成。</p>
+<pre class="flow">用户：请用工具统计“你好世界”
+  ↓
+模型 ← 宿主发送 messages + 工具说明 TOOLS_SCHEMA
+  ↓ 返回 tool_calls：text_stats({"text":"你好世界"})
+宿主 agent.py → execute_tool → tools.py 的 _text_stats
+  ↓ 业务参数变成 argv，调用 run_cli
+执行器 → 操作系统创建独立进程【真正的 CLI 调用边界】
+  ↓ python scripts/text_stats_cli.py -- "你好世界"
+CLI → stdout: {"characters":4,"pid":子进程编号} → 退出
+  ↓ 执行器收集 stdout / stderr / 退出码
+适配器校验 JSON → Agent 追加 role="tool"、原 tool_call_id
+  ↓ 再次请求模型
+模型：这段文本有 4 个 Unicode 码点。</pre>
+<p>上面需要至少两次模型请求：第一次拿到工具调用，第二次把结果交回模型生成回答。CLI 在两次请求之间运行。示例中的 pid 用于观察进程边界；它是教学字段，不代表真实业务必须返回进程号。</p>
+<div class="table-wrap"><table><tr><th>部件</th><th>知道什么</th><th>如何连接下一层</th></tr><tr><td>模型</td><td>text_stats 的说明与 text 参数</td><td>输出工具调用请求</td></tr><tr><td>agent.py（已有）</td><td>工具名称、参数、调用 ID</td><td>调用 execute_tool 并回传结果</td></tr><tr><td>tools.py 适配器</td><td>参数规则、CLI 路径与输出合同</td><td>import 执行器，传入 argv</td></tr><tr><td>cli_executor.py</td><td>进程、管道、超时</td><td>subprocess 启动程序</td></tr><tr><td>text_stats_cli.py</td><td>命令行参数与统计逻辑</td><td>stdout 输出 JSON</td></tr></table></div>
+<p><b>import 是加载进程内的模块；subprocess 是启动另一个程序。</b>tools.py 可以 import 执行器，但不会 import text_stats_cli.py。即使以后把 CLI 换成 Go 可执行文件，这条边界仍成立。</p>
+</section>
+<section id="part-3"><h2><span class="no">03</span>原理：专用工具怎样映射成命令</h2>
+<p>CLI 是程序暴露给命令行调用者的接口，既能由人在终端使用，也能由另一个程序启动。它不需要知道调用方是不是 Agent。这里选择自己写一个极小 CLI，使输入与输出都能看清；重点不是统计功能有多复杂。</p>
+<pre><code># 人在终端输入的等价命令
+python scripts/text_stats_cli.py -- &quot;你好世界&quot;
+
+# 宿主传给执行器的 argv（这是列表，不是 shell 字符串）
+[sys.executable, str(script), &quot;--&quot;, text]</code></pre>
+<p>sys.executable 指向当前 Python 解释器；script 是宿主固定的绝对路径；“--”结束 argparse 的选项解析，后面的 --help 也会当作文本。create_subprocess_exec(*argv) 按独立参数启动程序，不经过 shell；分号不会在这里变成另一条命令。它并不提供权限沙箱。</p>
+<p>本课采用“专用工具”：模型只填 text，宿主决定执行哪个程序。另一种方式是给模型 run_command 工具，让模型填写命令；那需要更广的命令授权与工作目录控制。两者都能连接 Agent 与 CLI，本课先把前者走通，T5 再讨论执行边界。</p>
+</section>
+<section id="part-4"><h2><span class="no">04</span>动手实现一：先做一个人也能使用的 CLI</h2>
+<p class="file-label">scripts/text_stats_cli.py</p>
+<pre data-file="scripts/text_stats_cli.py"><code>&quot;&quot;&quot;独立 CLI：只认识命令行参数，不知道 Agent、工具注册表或模型。&quot;&quot;&quot;
 
 import argparse
-import asyncio
 import json
-import sys
-import time
+import os
+
+
+def main():
+    parser = argparse.ArgumentParser(description=&quot;统计 Unicode 码点数量&quot;)
+    parser.add_argument(&quot;text&quot;, help=&quot;待统计文本；用 -- 结束选项解析&quot;)
+    args = parser.parse_args()
+    # argparse 默认返回 Any；在入口确认形状后再使用。
+    text: object = args.text
+    if not isinstance(text, str):
+        parser.error(&quot;text 必须是字符串&quot;)
+    print(json.dumps({&quot;characters&quot;: len(text), &quot;pid&quot;: os.getpid()}, ensure_ascii=False))
+
+
+if __name__ == &quot;__main__&quot;:
+    main()</code></pre>
+<p>CLI 只依赖 Python 标准库。stdout 保持为单个 JSON 结果；argparse 的用法错误会写入 stderr 并非零退出。这里 len(text) 数的是 Unicode 码点，组合字符、部分 emoji 与视觉上的“一个字”不一定一一对应。空字符串是合法输入。</p>
+<pre><code>uv run python scripts/text_stats_cli.py -- &quot;你好世界&quot;
+uv run python scripts/text_stats_cli.py -- &quot;&quot;
+uv run python scripts/text_stats_cli.py -- &quot;--help&quot;
+uv run python scripts/text_stats_cli.py</code></pre>
+<p>前三次 characters 分别为 4、0、6，pid 每次可能不同。最后一次缺少参数，应看到用法错误；紧接着运行 echo $?，应为 2。此时只证明 CLI 自己能运行，还没有模型参与。</p>
+</section>
+<section id="part-5"><h2><span class="no">05</span>动手实现二：宿主通过执行器启动 CLI</h2>
+<p>新建下面的执行器。先抓主线：create_subprocess_exec 启动 → 两根管道同时读取 → 等待退出 → 返回 CliResult。其余代码是在保护这条主线的生命周期。执行器不知道 text_stats 的业务含义。</p>
+<p class="file-label">app/services/cli_executor.py</p>
+<pre data-file="app/services/cli_executor.py"><code>import asyncio
 from contextlib import suppress
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -141,6 +199,9 @@ async def run_cli(argv: list[str], cwd: Path, timeout: float = 2.0, keep_bytes: 
     out_task = asyncio.create_task(read_bounded(proc.stdout, keep_bytes))
     err_task = asyncio.create_task(read_bounded(proc.stderr, keep_bytes))
     error: str | None = None
+    # 提前初始化，保证异常分支下变量也已绑定；类型由初始值推导。
+    out, err = &quot;&quot;, &quot;&quot;
+    out_cut, err_cut = False, False
     try:
         async with asyncio.timeout(timeout):
             await proc.wait()
@@ -160,87 +221,228 @@ async def run_cli(argv: list[str], cwd: Path, timeout: float = 2.0, keep_bytes: 
         await asyncio.gather(out_task, err_task, return_exceptions=True)
     if error is not None:
         return CliResult(proc.returncode, &quot;&quot;, &quot;&quot;, False, error)
-    return CliResult(proc.returncode, out, err, out_cut or err_cut)
+    return CliResult(proc.returncode, out, err, out_cut or err_cut)</code></pre>
+<p>read_bounded 对每根管道各保留最多 4096 字节，达到预算后继续读取但不保存，避免堵住子进程。truncated 为真时适配器会拒绝结果。decode 的替换字符可能令重新编码后的长度略超预算，预算约束的是保存的原始字节。</p>
+<p>TimeoutError 转为错误结果；上层 CancelledError 经过 finally 清理后继续传播。输出变量提前初始化，异常路径也不会出现“可能未赋值”。这个实现只管理直接子进程，适用于本课不派生后代的 CLI；反复取消清理任务、进程树监管需另行设计。</p>
+</section>
+<section id="part-6"><h2><span class="no">06</span>动手实现三：把 CLI 接到工具注册表</h2>
+<p>在 app/services/tools.py 合并以下 import，把结果模型与 _text_stats 放在 TOOL_REGISTRY 定义之前。该文件已有 json 导入，直接复用。不要用以下片段覆盖整个文件，保留天气、时间、RAG 与 MCP 的现有代码。</p>
+<p class="file-label">app/services/tools.py（适配器片段）</p>
+<pre data-file="app/services/tools.py（适配器片段）"><code># 合并到 tools.py 顶部 import 区；已有 json 不要重复导入。
+import sys
+from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from app.services.cli_executor import run_cli
 
 
-def worker():
-    &quot;&quot;&quot;独立子进程:stdout 只给机器结果,stderr 给诊断。mode 仅用于故障实验。&quot;&quot;&quot;
-    parser = argparse.ArgumentParser()
-    parser.add_argument(&quot;--mode&quot;, choices=[&quot;count&quot;, &quot;fail&quot;, &quot;flood&quot;, &quot;wait&quot;], default=&quot;count&quot;)
-    parser.add_argument(&quot;text&quot;)
-    args = parser.parse_args(sys.argv[2:])
-    if args.mode == &quot;fail&quot;:
-        print(&quot;模拟业务失败&quot;, file=sys.stderr)
-        raise SystemExit(3)
-    if args.mode == &quot;wait&quot;:
-        time.sleep(5)  # 真正制造慢命令,仅用于超时/取消实验。
-    if args.mode == &quot;flood&quot;:
-        print(&quot;x&quot; * 100_000)
-        print(&quot;y&quot; * 100_000, file=sys.stderr)
-        return
-    print(json.dumps({&quot;text&quot;: args.text, &quot;characters&quot;: len(args.text)}, ensure_ascii=False))
+class TextStatsResult(BaseModel):
+    # stdout 是外部数据：既检查 JSON，也检查字段类型与范围。
+    model_config = ConfigDict(strict=True, extra=&quot;forbid&quot;)
+    characters: int = Field(ge=0)
+    pid: int = Field(gt=0)
 
 
-async def text_stats(args: dict[str, object]):
-    &quot;&quot;&quot;与 TOOL_REGISTRY 的 ToolFunc 同形:业务参数进,JSON 字符串出。&quot;&quot;&quot;
-    value = args.get(&quot;text&quot;)
-    if not isinstance(value, str):
+async def _text_stats(args: dict[str, object]):
+    text = args.get(&quot;text&quot;)
+    if not isinstance(text, str):
         return json.dumps({&quot;error&quot;: &quot;text 必须是字符串&quot;}, ensure_ascii=False)
-    result = await run_cli(
-        [sys.executable, str(Path(__file__).resolve()), &quot;--worker&quot;, &quot;--&quot;, value],
-        Path(__file__).resolve().parent,
-    )
-    if result.error or result.returncode != 0 or result.truncated:
-        return json.dumps({&quot;error&quot;: &quot;CLI 未完整成功&quot;, &quot;detail&quot;: asdict(result)}, ensure_ascii=False)
-    # 此处先交回业务 JSON;消费其中字段的一侧仍应使用 Pydantic 验证。
-    return result.stdout
+    if len(text) &gt; 1000:
+        return json.dumps({&quot;error&quot;: &quot;本实验最多接受 1000 个码点&quot;}, ensure_ascii=False)
+
+    # tools.py 位于 app/services/；parents[2] 是项目根目录。
+    root = Path(__file__).resolve().parents[2]
+    script = root / &quot;scripts&quot; / &quot;text_stats_cli.py&quot;
+    # 模型只提供 text；程序、脚本位置与超时由宿主固定。
+    result = await run_cli([sys.executable, str(script), &quot;--&quot;, text], root)
+    if result.error is not None:
+        return json.dumps({&quot;error&quot;: result.error}, ensure_ascii=False)
+    if result.returncode != 0:
+        return json.dumps(
+            {&quot;error&quot;: &quot;CLI 非零退出&quot;, &quot;returncode&quot;: result.returncode, &quot;stderr&quot;: result.stderr},
+            ensure_ascii=False,
+        )
+    if result.truncated:
+        return json.dumps({&quot;error&quot;: &quot;CLI 输出被截断，不能作为完整结果&quot;}, ensure_ascii=False)
+    try:
+        parsed = TextStatsResult.model_validate_json(result.stdout)
+    except ValidationError:
+        return json.dumps({&quot;error&quot;: &quot;CLI 输出不符合统计结果合同&quot;}, ensure_ascii=False)
+    return parsed.model_dump_json()</code></pre>
+<p>这里有两个外部数据入口：模型参数用 isinstance 检查；CLI 的 stdout 用 Pydantic 建模。execute_tool 当前只检查必填键，不检查 text 的值类型，所以适配器仍需校验。退出码为 0 只说明进程成功退出；还必须通过业务结果合同。若未来 CLI 自带业务错误字段，需把它加入合同并明确处理。</p>
+<p class="file-label">app/services/tools.py（注册片段）</p>
+<pre data-file="app/services/tools.py（注册片段）"><code># 放在现有 TOOL_REGISTRY 和 TOOLS_SCHEMA 都定义完成之后；只添加一次。
+TOOL_REGISTRY[&quot;text_stats&quot;] = _text_stats
+TOOLS_SCHEMA.append({
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {
+        &quot;name&quot;: &quot;text_stats&quot;,
+        &quot;description&quot;: &quot;通过独立 CLI 精确统计原文的 Unicode 码点数，最多 1000 个码点。&quot;,
+        &quot;parameters&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;properties&quot;: {&quot;text&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;原文，不要改写&quot;}},
+            &quot;required&quot;: [&quot;text&quot;],
+        },
+    },
+})</code></pre>
+<p>TOOLS_SCHEMA 是给模型看的说明；TOOL_REGISTRY 是宿主实际执行的函数表。只加前者，模型可能提出请求却找不到实现；只加后者，模型看不到可用能力。工具名不要与 MCP 重名：项目当前 MCP 同名覆盖内置，执行分发也优先走 MCP。</p>
+<h3>先绕过模型，直接验证 execute_tool → CLI</h3>
+<p class="file-label">scripts/t2_tool_smoke.py</p>
+<pre data-file="scripts/t2_tool_smoke.py"><code>&quot;&quot;&quot;先验证工具分发与真实子进程，不请求模型。&quot;&quot;&quot;
+
+import asyncio
+import json
+import os
+
+from app.services.tools import TextStatsResult, execute_tool
 
 
 async def main():
-    base = [sys.executable, str(Path(__file__).resolve()), &quot;--worker&quot;]
+    for text in (&quot;你好世界&quot;, &quot;&quot;, &quot;--help&quot;, &quot;你好; echo unsafe&quot;):
+        raw = await execute_tool(&quot;text_stats&quot;, json.dumps({&quot;text&quot;: text}, ensure_ascii=False))
+        result = TextStatsResult.model_validate_json(raw)
+        assert result.characters == len(text)
+        assert result.pid != os.getpid()  # 业务结果来自另一个进程。
+        print(&quot;原文:&quot;, repr(text), &quot;宿主 PID:&quot;, os.getpid(), &quot;CLI 结果:&quot;, raw)
+    for args in ({}, {&quot;text&quot;: 123}, {&quot;text&quot;: &quot;x&quot; * 1001}):
+        raw = await execute_tool(&quot;text_stats&quot;, json.dumps(args))
+        assert &quot;error&quot; in raw
+        print(&quot;预期错误:&quot;, raw)
+
+
+if __name__ == &quot;__main__&quot;:
+    asyncio.run(main())</code></pre>
+<pre><code>uv run python -m scripts.t2_tool_smoke</code></pre>
+<p>该命令沿真实工具分发路径启动 CLI；结果中的子进程 PID 应不同于宿主 PID，特殊字符保持原文语义。它会加载现有 tools.py 的依赖，因此需使用已配置的项目环境（包括有效配置和已安装依赖）；不调用 LLM，也不主动执行数据库查询。</p>
+</section>
+<section id="part-7"><h2><span class="no">07</span>动手实现四：让真实模型驱动完整流程</h2>
+<p>项目已有 run_agent 与 run_agent_stream，都经过 execute_tool；本课复用非流式 run_agent，先把轨迹看清。以下是现有循环的关键动作摘录，仅用于阅读，不要再复制一套到 agent.py。</p>
+<pre><code># ① 每轮把工具说明交给模型
+response = await llm_client.chat_with_tools(messages, tool_params)
+
+# ② 保存模型的 assistant 工具调用消息，然后逐条执行
+result = await execute_tool(tool_call.function.name, tool_call.function.arguments)
+
+# ③ 工具结果绑定原请求 ID，下一轮模型才能知道这是哪次调用的结果
+messages.append({&quot;role&quot;: &quot;tool&quot;, &quot;tool_call_id&quot;: tool_call.id, &quot;content&quot;: result})
+# 下一轮循环再次调用模型；没有工具请求时返回最终回答。</code></pre>
+<p class="file-label">scripts/t2_agent_demo.py</p>
+<pre data-file="scripts/t2_agent_demo.py"><code>&quot;&quot;&quot;真实模型端到端实验；使用已有 run_agent，不复制 Agent 循环。&quot;&quot;&quot;
+
+import asyncio
+import os
+
+from app.services.agent import build_llm_messages, run_agent
+from app.services.tools import TextStatsResult
+
+
+async def main():
+    messages = build_llm_messages([])
+    messages.append({
+        &quot;role&quot;: &quot;user&quot;,
+        &quot;content&quot;: &quot;请调用 text_stats 工具统计原文‘你好世界’的 Unicode 码点数，原文不含引号。&quot;,
+    })
+    answer, trace = await run_agent(messages)
+    print(&quot;宿主 PID:&quot;, os.getpid())
+    call_ids: set[str] = set()
+    verified = False
+    for message in trace:
+        print(message)  # 展示 assistant 申请单、tool 结果和最终回答。
+        for call in message.get(&quot;tool_calls&quot;) or []:
+            if call[&quot;function&quot;][&quot;name&quot;] == &quot;text_stats&quot;:
+                call_ids.add(call[&quot;id&quot;])
+        if message[&quot;role&quot;] == &quot;tool&quot; and message.get(&quot;tool_call_id&quot;) in call_ids:
+            result = TextStatsResult.model_validate_json(message.get(&quot;content&quot;) or &quot;&quot;)
+            assert result.characters == 4
+            assert result.pid != os.getpid()
+            verified = True
+    assert verified, &quot;没有找到匹配的 CLI 工具结果；答对数字也不算调用成功&quot;
+    print(&quot;最终回答:&quot;, answer)
+
+
+if __name__ == &quot;__main__&quot;:
+    asyncio.run(main())</code></pre>
+<pre><code>uv run python -m scripts.t2_agent_demo</code></pre>
+<p>前置条件：项目依赖已安装，.env 中方舟模型相关配置可用；这一步会真实请求模型并产生 API 用量。它直接调用 Agent 服务，不启动 FastAPI，也不写入聊天记录；使用已有 build_llm_messages 构建上下文，因此练习脚本无需 import SDK 类型。此命令不会执行 lifespan 的 MCP 注册，足以验证本课新增的内置 CLI 工具。</p>
+<pre><code># 下面是轨迹形状示意，ID 和 PID 由真实运行产生
+assistant: tool_calls=[{
+    &quot;id&quot;: &quot;call_abc&quot;, &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {&quot;name&quot;: &quot;text_stats&quot;, &quot;arguments&quot;: &quot;{\&quot;text\&quot;:\&quot;你好世界\&quot;}&quot;}
+}]
+tool: tool_call_id=&quot;call_abc&quot;, content=&#x27;{&quot;characters&quot;:4,&quot;pid&quot;:12345}&#x27;
+assistant: content=&quot;这段文本共有 4 个 Unicode 码点。&quot;</code></pre>
+<p>验收需要同时找到 text_stats 请求、匹配 ID 的 tool 结果、不同于宿主的 CLI PID 和最终回答。模型直接口算回答也可能是 4，但脚本会拒绝把它当作成功。没有调用时先看轨迹和工具说明；参数错误则先看请求原文；不要用最终自然语言回答代替链路证据。</p>
+<p>本课不要求修改 agent.py。以后通过现有 HTTP 接口使用时，重启服务使注册生效，原 agentic loop 就会看到新工具；路由的会话、持久化与并发控制仍由已有代码负责。</p>
+</section>
+<section id="part-8"><h2><span class="no">08</span>思考题：沿调用边界解释原因</h2>
+<details><summary>为什么不直接 import CLI 的 main？</summary><p>那会变成进程内函数调用，绕过命令行参数、stdout、退出码与独立进程边界。复用 Python 库当然可以，但那是另一种工具实现方式。</p></details>
+<details><summary>模型知道 text_stats_cli.py 在哪里吗？</summary><p>本课不需要。模型只看工具说明，宿主在适配器中固定路径；路径、解释器和超时没有交给模型选择。</p></details>
+<details><summary>为什么不能把 stdout 直接当最终回答？</summary><p>stdout 是工具结果。Agent 需把它关联到原 tool_call_id，再交给模型继续推理或组织回答；另外 stdout 仍需校验，可能是报错文本或错误形状。</p></details>
+<details><summary>为什么 stdout 与 stderr 必须一起读？</summary><p>任何一根管道写满都可能阻塞子进程。先等退出再读，或者先完整读完一根再读另一根，都可能死锁。</p></details>
+<details><summary>CLI 启动成功是否等于任务成功？</summary><p>分三层判断：能否启动、退出码是否成功、业务输出是否有效。超时与截断也不能当作完整成功。</p></details>
+<details><summary>为什么例子很小却还用 CLI？</summary><p>为了把跨进程接口显露出来。实际能力可以来自已有命令行程序，Agent 不必把其业务逻辑重新写一遍；选择 CLI 是复用能力的方式，不是所有工具必须走的步骤。</p></details>
+</section>
+<section id="part-9"><h2><span class="no">09</span>验证实验：正常、边界和失败路径</h2>
+<p>主链走通后再做执行器实验。故障由测试启动的 Python 小程序制造，不往业务 CLI 塞 --worker、--mode 或测试入口。</p>
+<p class="file-label">scripts/t2_executor_checks.py</p>
+<pre data-file="scripts/t2_executor_checks.py"><code>&quot;&quot;&quot;执行器行为测试：真实启动子进程，不调用模型。&quot;&quot;&quot;
+
+import asyncio
+import sys
+from pathlib import Path
+
+from app.services.cli_executor import run_cli
+
+
+async def main():
     cwd = Path.cwd()
-    ok = await run_cli([*base, &quot;--&quot;, &quot;你好; echo unsafe&quot;], cwd)
-    assert ok.returncode == 0 and &quot;你好; echo unsafe&quot; in ok.stdout
-    fail = await run_cli([*base, &quot;--mode&quot;, &quot;fail&quot;, &quot;a&quot;], cwd)
-    assert fail.returncode == 3 and &quot;模拟业务失败&quot; in fail.stderr
-    flood = await run_cli([*base, &quot;--mode&quot;, &quot;flood&quot;, &quot;a&quot;], cwd, keep_bytes=64)
-    assert flood.truncated and len(flood.stdout.encode()) == 64
-    slow = await run_cli([*base, &quot;--mode&quot;, &quot;wait&quot;, &quot;a&quot;], cwd, timeout=0.2)
-    assert slow.error == &quot;执行超时&quot;
-    missing = await run_cli([&quot;/definitely-not-an-installed-command&quot;], cwd)
+    ok = await run_cli([sys.executable, &quot;-c&quot;, &quot;print(&#x27;ok&#x27;)&quot;], cwd)
+    assert ok.returncode == 0 and ok.stdout.strip() == &quot;ok&quot;
+    fail = await run_cli([sys.executable, &quot;-c&quot;, &quot;import sys; sys.stderr.write(&#x27;bad&#x27;); sys.exit(3)&quot;], cwd)
+    assert fail.returncode == 3 and fail.stderr == &quot;bad&quot;
+    flood = await run_cli(
+        [sys.executable, &quot;-c&quot;, &quot;import sys; print(&#x27;x&#x27;*100000); sys.stderr.write(&#x27;y&#x27;*100000)&quot;],
+        cwd, keep_bytes=64,
+    )
+    assert flood.returncode == 0 and flood.truncated
+    assert len(flood.stdout) == len(flood.stderr) == 64
+    slow = [sys.executable, &quot;-c&quot;, &quot;import time; time.sleep(10)&quot;]
+    result = await run_cli(slow, cwd, timeout=0.1)
+    assert result.error == &quot;执行超时&quot; and result.returncode is not None
+    missing = await run_cli([str(cwd / &quot;__t2_missing_executable__&quot;)], cwd)
     assert missing.error is not None and missing.returncode is None
-    task = asyncio.create_task(run_cli([*base, &quot;--mode&quot;, &quot;wait&quot;, &quot;a&quot;], cwd))
-    await asyncio.sleep(0.05)  # 测试时让子进程启动;产品路径不靠延时排序。
+    task = asyncio.create_task(run_cli(slow, cwd))
+    await asyncio.sleep(0.1)  # 仅测试中让子进程进入等待，再触发取消。
     task.cancel()
     try:
         await task
     except asyncio.CancelledError:
         pass
     else:
-        raise AssertionError(&quot;取消必须传回调用方&quot;)
-    assert &quot;error&quot; in await text_stats({&quot;text&quot;: 123})
-    print(&quot;T2:成功、非零退出、输出限制、超时、启动失败、取消、类型错误均通过&quot;)
+        raise AssertionError(&quot;取消必须传播给调用方&quot;)
+    try:
+        await run_cli([], cwd)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(&quot;空 argv 必须被拒绝&quot;)
+    print(&quot;执行器：成功、非零退出、双管道限量、超时、启动失败、取消与参数校验通过&quot;)
 
 
 if __name__ == &quot;__main__&quot;:
-    if len(sys.argv) &gt; 1 and sys.argv[1] == &quot;--worker&quot;:
-        worker()
-    else:
-        asyncio.run(main())</code></pre><div class="table-wrap"><table><tr><th>函数</th><th>读代码时关注什么</th></tr><tr><td>read_bounded</td><td>总字节数与保留字节数分开；即使已保留足够内容,循环仍继续排空。</td></tr><tr><td>run_cli</td><td>输入验证在启动前；OSError 是启动失败；finally 始终等待进程回收。</td></tr><tr><td>worker</td><td>真实 CLI 可以带登录态或交互提示。本例禁用 stdin,只演示可脚本化的机器接口。</td></tr><tr><td>text_stats</td><td>把 CliResult 适配回工具字符串；截断结果不当作完整 JSON 解析。</td></tr><tr><td>main</td><td>每条断言都对应一个行为,不用模型打分判断进程是否被正确处理。</td></tr></table></div><p>步骤二：理解异常出口。TimeoutError 在执行器内转成明确结果；CancelledError 穿过 finally 返回调用方。此处只演示单次取消,服务关闭时还需确保清理任务不被反复取消。</p><p>步骤三：接回项目时,把执行器部分移到 app/services/cli_executor.py,把 worker 单独保留为受控脚本,并为 tools.py 写一个异步适配函数。先只用本实验测试,再执行下面的项目接入练习。</p></section><section id="part-5"><h2><span class="no">05</span>接回工具注册表：具体改动位置</h2><p>若先直接复用实验文件,可以在 tools.py 导入它的 text_stats 作为过渡,不引入 SDK。下列片段由你加入现有定义之后；最终工程化时再把通用执行器移到 services。</p><pre><code>from scripts.t2_cli_lab import text_stats
-
-TOOL_REGISTRY[&quot;text_stats&quot;] = text_stats
-TOOLS_SCHEMA.append({
-    &quot;type&quot;: &quot;function&quot;,
-    &quot;function&quot;: {
-        &quot;name&quot;: &quot;text_stats&quot;,
-        &quot;description&quot;: &quot;精确计算用户提供文本的字符数。&quot;,
-        &quot;parameters&quot;: {
-            &quot;type&quot;: &quot;object&quot;,
-            &quot;properties&quot;: {&quot;text&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;要统计的原文&quot;}},
-            &quot;required&quot;: [&quot;text&quot;],
-        },
-    },
-})</code></pre><p>run_agent 与 run_agent_stream 都已经经过 execute_tool,这一步不需要复制两套 subprocess 逻辑。工具名称不能与 MCP 同名,否则现有优先级会转向 MCP。正式接入还应把 stdout JSON 用 Pydantic 建模,避免未来更换 CLI 后返回非 JSON 或字段漂移。</p><p>为什么练习里不让模型传 executable？因为选择可执行程序属于 host 提供能力的范围；模型只填 text 业务参数。即使用 exec 而不用 shell,开放任意程序路径仍然是开放执行权限。</p></section><section id="part-6"><h2><span class="no">06</span>思考题与详解</h2><details><summary>为什么超时后不能只 return 一个 error？</summary><p>父协程返回并不会让子进程自动结束。finally 必须终止仍在运行的进程并 wait,否则程序继续耗资源。</p></details><details><summary>为什么输出保留满了以后还继续 read？</summary><p>如果不读,子进程可能卡在写满的管道上,无法退出。另一种可选设计是达到上限立即终止子进程,但要把这种终止定义为失败,不能当成正常完成。</p></details><details><summary>为什么不把一个 shell 命令整体拼成字符串？</summary><p>模型文本一旦被 shell 解释,引号、分号、重定向都会改变行为。argv 保留数据边界;-- 还避免文本被 argparse 当作选项。</p></details></section><section id="part-7"><h2><span class="no">07</span>验证实验</h2><pre><code>uv run python -m ruff check scripts/t2_cli_lab.py
-uv run python -m mypy --check-untyped-defs scripts/t2_cli_lab.py
-uv run python scripts/t2_cli_lab.py
-uv run python scripts/t2_cli_lab.py --worker -- &quot;你好; echo unsafe&quot;</code></pre><p>最后一条应输出包含完整原文的 JSON,不能另行执行 echo。主测试包含成功、非零退出、双管道大量输出、超时、程序不存在、取消和非法 text 类型。然后将 timeout 调大并再运行 wait 模式,对比“慢但成功”和“超时失败”。</p><p>接入主项目后,先直接 await execute_tool("text_stats", JSON字符串),再通过现有聊天接口让模型统计原文；检查 tool_call_id 和最终结果。不要仅凭模型答对字符数就认为它真的调用了 CLI,应查看工具轨迹。</p></section><section id="part-8"><h2><span class="no">08</span>对比小结与进阶预告</h2><p>进程内函数与 CLI 工具都可以保持 ToolFunc 的形状,区别在执行器内部。下一课 T3 在进程间增加消息协议和连接生命周期：一个长驻 server 可以处理多次请求,无需每次从头启动 CLI。</p></section></main><footer>study-fastapi · T2 · 2026-10-21 · 纯 HTML / 离线可读</footer></body></html>
+    asyncio.run(main())</code></pre>
+<pre><code>uv run python -m ruff check app/services/cli_executor.py app/services/tools.py scripts/text_stats_cli.py scripts/t2_tool_smoke.py scripts/t2_agent_demo.py scripts/t2_executor_checks.py
+uv run python -m mypy --check-untyped-defs app/services/cli_executor.py app/services/tools.py scripts/text_stats_cli.py scripts/t2_tool_smoke.py scripts/t2_agent_demo.py scripts/t2_executor_checks.py
+uv run python -m scripts.t2_executor_checks
+uv run python -m scripts.t2_tool_smoke
+uv run python -m scripts.t2_agent_demo</code></pre>
+<p>按顺序区分三类验证：执行器行为、工具分发到 CLI、真实模型端到端。静态检查报到既有代码时按文件定位，不能把整仓已有问题混成新增例子的失败。执行器取消断言验证取消传播；若要进一步证明无遗留进程，可在调试器停在 proc 创建后记录 PID，取消后用 ps -p PID 检查。</p>
+<h3>再做两个输出合同故障实验</h3>
+<p>临时把 CLI 的 print 改为 print("not-json")，运行 t2_tool_smoke：应看到“CLI 输出不符合统计结果合同”，成功断言会失败。再改为 print(json.dumps({"characters": "4", "pid": os.getpid()}))：严格类型校验也应拒绝字符串数字。每次只改一处并恢复原实现，最后重跑工具与模型实验。</p>
+</section>
+<section id="part-10"><h2><span class="no">10</span>对比小结与进阶预告</h2>
+<div class="table-wrap"><table><tr><th>方式</th><th>调用边界</th><th>模型是否必须变化</th></tr><tr><td>进程内 Python 函数</td><td>宿主直接调用函数</td><td>工具合同不变时无需变化</td></tr><tr><td>本课专用 CLI 工具</td><td>适配器 → 执行器 → 独立程序</td><td>仍然只请求 text_stats</td></tr><tr><td>通用命令工具</td><td>模型提供命令，宿主授权后执行</td><td>需提供对应命令工具说明</td></tr><tr><td>MCP 工具</td><td>宿主通过协议调用 server 能力</td><td>宿主将能力映射成模型可用工具</td></tr></table></div>
+<p>本课最重要的连接是：模型请求工具 → 宿主按表分发 → 适配器组装 argv → 执行器启动 CLI → 校验结果 → 工具消息回到模型。下一课 T3 在进程间引入 MCP 消息协议与能力发现，理解长期运行的 server 怎样接受多次请求。</p>
+<p>参考：<a href="https://docs.python.org/3.13/library/asyncio-subprocess.html">Python 3.13 asyncio 子进程文档</a>。其中说明了 PIPE 的死锁风险及 communicate 的内存缓冲限制；本课使用两路并发读取并限制保留量。</p>
+</section></main><footer>study-fastapi · T2 · 2026-10-21 · 纯 HTML / 离线可读</footer></body></html>

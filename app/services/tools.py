@@ -8,13 +8,53 @@ execute_tool 只负责查表/解 JSON/按 schema 验必填,参数解包下放给
 """
 
 import json
+import sys
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Literal, TypedDict, cast
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
 from app.database.pgsql_client import AsyncSessionLocal
+from app.services.cli_executor import run_cli
 from app.services.llm.client import llm_client
 from app.services.mcp.client import McpToolMeta  # 顶部 import 区
 from app.services.rag import retriever
+
+
+class TextStatsResult(BaseModel):
+    # stdout 是外部数据：既检查 JSON，也检查字段类型与范围。
+    model_config = ConfigDict(strict=True, extra="forbid")
+    characters: int = Field(ge=0)
+    pid: int = Field(gt=0)
+
+
+async def _text_stats(args: dict[str, object]):
+    text = args.get("text")
+    if not isinstance(text, str):
+        return json.dumps({"error": "text 必须是字符串"}, ensure_ascii=False)
+    if len(text) > 1000:
+        return json.dumps({"error": "本实验最多接受 1000 个码点"}, ensure_ascii=False)
+
+    # tools.py 位于 app/services/；parents[2] 是项目根目录。
+    root = Path(__file__).resolve().parents[2]
+    script = root / "scripts" / "text_stats_cli.py"
+    # 模型只提供 text；程序、脚本位置与超时由宿主固定。
+    result = await run_cli([sys.executable, str(script), "--", text], root)
+    if result.error is not None:
+        return json.dumps({"error": result.error}, ensure_ascii=False)
+    if result.returncode != 0:
+        return json.dumps(
+            {"error": "CLI 非零退出", "returncode": result.returncode, "stderr": result.stderr},
+            ensure_ascii=False,
+        )
+    if result.truncated:
+        return json.dumps({"error": "CLI 输出被截断，不能作为完整结果"}, ensure_ascii=False)
+    try:
+        parsed = TextStatsResult.model_validate_json(result.stdout)
+    except ValidationError:
+        return json.dumps({"error": "CLI 输出不符合统计结果合同"}, ensure_ascii=False)
+    return parsed.model_dump_json()
 
 
 async def _get_current_weather(args: dict[str, object]):
@@ -121,7 +161,19 @@ TOOL_REGISTRY: dict[str, ToolFunc] = {
     "get_city_time": _get_city_time,
     "search_knowledge_base": _search_knowledge_base,
 }
-
+TOOL_REGISTRY["text_stats"] = _text_stats
+TOOLS_SCHEMA.append({
+    "type": "function",
+    "function": {
+        "name": "text_stats",
+        "description": "通过独立 CLI 精确统计原文的 Unicode 码点数，最多 1000 个码点。",
+        "parameters": {
+            "type": "object",
+            "properties": {"text": {"type": "string", "description": "原文，不要改写"}},
+            "required": ["text"],
+        },
+    },
+})
 
 # MCP 外接工具:name → 简历。启动时由 lifespan 注入,同名覆盖内置(外接视为最新版本,内置兜底)
 _mcp_schemas: dict[str, McpToolMeta] = {}
