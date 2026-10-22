@@ -91,7 +91,7 @@
 <header class="hero"><div class="kicker">AGENT 开发 · 专题课 T3</div><h1>MCP 协议与能力接入</h1><p>在已有 L7 的 stdio + JSON-RPC 基础上补齐三类原语，并审视错误、并发和关闭流程。练习固定使用 2025-06-18，避免把不同版本的消息混在一起。</p></header>
 <main><nav class="lesson-nav" aria-label="专题课导航"><a href="../T1/t1_agent_ecosystem.html">T1 · Agent 生态总览</a><a href="../T2/t2_cli_executor.html">T2 · CLI 与工具执行器</a><a href="../T3/t3_mcp_protocol.html">T3 · MCP 协议与能力接入</a><a href="../T4/t4_skill_loader.html">T4 · SKILL 与按需加载</a><a href="../T5/t5_rules_execution.html">T5 · Rules 与执行边界</a></nav><nav class="toc" aria-label="本课目录"><h2>本课目录</h2><ol><li><a href="#part-1">本课目标</a></li><li><a href="#part-2">背景回顾：项目里已有哪一半</a></li><li><a href="#part-3">原理：三类原语与上下文入口</a></li><li><a href="#part-4">动手一：提供三类能力的离线 server</a></li><li><a href="#part-5">动手二：完整请求加锁的 client</a></li><li><a href="#part-6">接回现有 Agent：发现、映射、执行</a></li><li><a href="#part-7">思考题与详解</a></li><li><a href="#part-8">验证实验</a></li><li><a href="#part-9">对比小结与进阶预告</a></li></ol></nav><section id="part-1"><h2><span class="no">01</span>本课目标</h2><p>实现并观察 tools/list→tools/call、resources/list→resources/read、prompts/list→prompts/get；把协议结果、业务失败和连接失败分清。理解为什么共享 stdout 必须有唯一读取者,以及最小串行 client 怎样保证正确性。</p><div class="box ok"><b class="t">练习方式</b>本课代码是供你亲手输入的教学内容。Agent 维护 doc/ 课件；app/、scripts/ 和配置由你自己创建或修改。先运行独立实验，再按接入说明修改主项目。代码中的演示工具与目录均会明确标注，不把实验结果当作模型端到端验收。</div></section><section id="part-2"><h2><span class="no">02</span>背景回顾：项目里已有哪一半</h2><div class="table-wrap"><table><tr><th>位置</th><th>现有行为</th><th>扩展时的边界</th></tr><tr><td>app/main.py · lifespan</td><td>start → register_mcp_tools → yield → stop</td><td>连接由应用生命周期管理,不在每个工具调用里重建。</td></tr><tr><td>app/services/mcp/client.py</td><td>initialize、initialized、tools/list、tools/call</td><td>目前没有资源与提示词方法,没有检查返回版本或按能力跳过发现。</td></tr><tr><td>scripts/l7_mcp_server.py</td><td>只声明 tools,调用 execute_tool 检索知识库</td><td>真实检索依赖配置/embedding/数据库;协议实验先用固定数据。</td></tr><tr><td>tools.py · get_all_tool_schemas</td><td>MCP 元数据转换成模型工具 schema,同名覆盖内置</td><td>并非所有 MCP inputSchema 都能诚实 cast 到项目的扁平 _ParamsSchema。</td></tr></table></div><p>现有 McpClient._recv 每次调用自己 readline,且用共享 self._request_id 等待结果。不同会话共享同一个 client,可能并发进入,即使单个 agent 内部顺序调用也会争抢响应。它还会跳过不匹配的消息,若其中是另一个调用的响应,这个响应便丢了。stop 当前 terminate 后未 wait,也值得在正式化时补齐。</p></section><section id="part-3"><h2><span class="no">03</span>原理：三类原语与上下文入口</h2><div class="table-wrap"><table><tr><th>原语</th><th>通常由谁决定使用</th><th>数据形状</th><th>如何进入模型</th></tr><tr><td>tools</td><td>模型选择,host 执行</td><td>inputSchema 定义参数;结果 content/isError</td><td>host 将结果写入绑定 tool_call_id 的 tool 消息。</td></tr><tr><td>resources</td><td>host 选择,也可提供 UI 供用户选</td><td>URI + contents;文本 text 或二进制 blob</td><td>host 读取后将其作为有来源的参考资料注入。</td></tr><tr><td>prompts</td><td>用户选择模板,host 展开</td><td>字符串参数 → user/assistant messages</td><td>host 按内容类型映射为模型消息,不会自动启动推理。</td></tr></table></div><pre class="flow">initialize(协商版本/能力) → notifications/initialized(不回复)
 → 发现目录 → 选择 URI / 名称 → read / get / call
-→ 验证 JSON-RPC 外壳 → 验证业务 result → host 决定使用方式</pre><p>列目录不是读全文。资源模板 resources/templates/list 描述 URI 模式,不是穷举所有资源；资源和提示词可以按需加载,不必一启动就塞进模型。目录可能返回 nextCursor,正式 client 应循环翻页并合并结果。示例固定一页,若出现游标就让断言失败,不能悄悄丢后续页。</p><div class="table-wrap"><table><tr><th>失败</th><th>表现</th><th>接收方动作</th></tr><tr><td>JSON 语法错误</td><td>-32700</td><td>定位发送端序列化或 stdout 污染。</td></tr><tr><td>未知方法/非法参数</td><td>-32601 / -32602</td><td>修正请求,保留服务端错误信息。</td></tr><tr><td>资源不存在</td><td>-32002</td><td>换合法 URI,不把空内容当成功。</td></tr><tr><td>工具业务失败</td><td>result.isError=true</td><td>协议仍成功,将业务错误作为结果交回模型。</td></tr><tr><td>EOF/超时/取消</td><td>本地连接异常</td><td>清理连接;不能靠重复调用掩盖失败。</td></tr></table></div><p class="muted">核对依据：<a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle">生命周期</a> · <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">Tools</a> · <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/resources">Resources</a> · <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/prompts">Prompts</a></p></section><section id="part-4"><h2><span class="no">04</span>动手一：提供三类能力的离线 server</h2><p>创建 scripts/t3_mcp_server.py。这里 search_knowledge_base 使用固定文本,保留业务工具名称以便对照 L7,但它不是实际 RAG。stdout 只输出一行一个 JSON；将诊断写入 stderr。服务端只支持文本、小消息和串行处理,不声明可选订阅能力。</p><p class="file-label">由你创建：scripts/t3_mcp_server.py</p><pre data-file="scripts/t3_mcp_server.py"><code>&quot;&quot;&quot;T3 离线协议实验台:只提供固定文本,不访问真实知识库。&quot;&quot;&quot;
+→ 验证 JSON-RPC 外壳 → 验证业务 result → host 决定使用方式</pre><p>列目录不是读全文。资源模板 resources/templates/list 描述 URI 模式,不是穷举所有资源；资源和提示词可以按需加载,不必一启动就塞进模型。目录可能返回 nextCursor,正式 client 应循环翻页并合并结果。示例固定一页,若出现游标就让断言失败,不能悄悄丢后续页。</p><div class="table-wrap"><table><tr><th>失败</th><th>表现</th><th>接收方动作</th></tr><tr><td>JSON 语法错误</td><td>-32700</td><td>定位发送端序列化或 stdout 污染。</td></tr><tr><td>未知方法/非法参数</td><td>-32601 / -32602</td><td>修正请求,保留服务端错误信息。</td></tr><tr><td>资源不存在</td><td>-32002</td><td>换合法 URI,不把空内容当成功。</td></tr><tr><td>工具业务失败</td><td>result.isError=true</td><td>协议仍成功,将业务错误作为结果交回模型。</td></tr><tr><td>EOF/超时/取消</td><td>本地连接异常</td><td>清理连接;不能靠重复调用掩盖失败。</td></tr></table></div><p class="muted">核对依据：<a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle">生命周期</a> · <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">Tools</a> · <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/resources">Resources</a> · <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/prompts">Prompts</a></p></section><section id="part-4"><h2><span class="no">04</span>动手一：提供三类能力的离线 server</h2><p>创建 scripts/t3_mcp_server.py。这里 search_knowledge_base 使用固定文本,保留业务工具名称以便对照 L7,但它不是实际 RAG。stdout 只输出一行一个 JSON；将诊断写入 stderr。服务端只支持文本、小消息和串行处理,不声明可选订阅能力。</p><div class="box"><b class="t">类型推导：为什么不直接 return 字典？</b><p>多种嵌套字典与空字典可能让编辑器把 dispatch 的返回类型推导为含 Unknown 的联合类型。函数开头只声明一次 <code>result: dict[str, object]</code>，每个分支先赋值再 <code>return result</code>，为字典字面量提供类型上下文，也保留本项目省略返回类型的约定。</p><p><code>object</code> 表示值可以是任意对象，但使用其具体操作前仍需收窄；它不是绕过检查的 Any。这层只组装并序列化结果，不保证递归 JSON 合法性，也不验证每种 MCP result 的完整形状；读取具体字段时仍应使用 Pydantic 或 TypedDict 合同。不要用 cast 或 type: ignore 掩盖推导问题。</p></div><p class="file-label">由你创建：scripts/t3_mcp_server.py</p><pre data-file="scripts/t3_mcp_server.py"><code>&quot;&quot;&quot;T3 离线协议实验台:只提供固定文本,不访问真实知识库。&quot;&quot;&quot;
 
 import json
 import sys
@@ -127,14 +127,16 @@ def send(message: dict[str, object]):
 
 
 def dispatch(req: Request):
+    result: dict[str, object]  # 异构字典需要类型提示,返回类型由此推导。
     if req.method == &quot;initialize&quot;:
-        return {
+        result = {
             &quot;protocolVersion&quot;: VERSION,
             &quot;serverInfo&quot;: {&quot;name&quot;: &quot;t3-lab&quot;, &quot;version&quot;: &quot;0.1&quot;},
             &quot;capabilities&quot;: {&quot;tools&quot;: {}, &quot;resources&quot;: {}, &quot;prompts&quot;: {}},
         }
+        return result
     if req.method == &quot;tools/list&quot;:
-        return {
+        result = {
             &quot;tools&quot;: [
                 {
                     &quot;name&quot;: &quot;search_knowledge_base&quot;,
@@ -143,21 +145,25 @@ def dispatch(req: Request):
                 }
             ]
         }
+        return result
     if req.method == &quot;tools/call&quot;:
         if req.params.get(&quot;name&quot;) != &quot;search_knowledge_base&quot;:
             raise ValueError(&quot;未知工具&quot;)
         args = ToolArgs.model_validate(req.params.get(&quot;arguments&quot;, {}))
         failed = args.question == &quot;模拟失败&quot;
         text = json.dumps({&quot;error&quot;: &quot;模拟检索失败&quot;} if failed else {&quot;result&quot;: [{&quot;content&quot;: TEXT}]}, ensure_ascii=False)
-        return {&quot;content&quot;: [{&quot;type&quot;: &quot;text&quot;, &quot;text&quot;: text}], &quot;isError&quot;: failed}
+        result = {&quot;content&quot;: [{&quot;type&quot;: &quot;text&quot;, &quot;text&quot;: text}], &quot;isError&quot;: failed}
+        return result
     if req.method == &quot;resources/list&quot;:
-        return {&quot;resources&quot;: [{&quot;uri&quot;: URI, &quot;name&quot;: &quot;kb-guide&quot;, &quot;mimeType&quot;: &quot;text/plain&quot;}]}
+        result = {&quot;resources&quot;: [{&quot;uri&quot;: URI, &quot;name&quot;: &quot;kb-guide&quot;, &quot;mimeType&quot;: &quot;text/plain&quot;}]}
+        return result
     if req.method == &quot;resources/read&quot;:
         if req.params.get(&quot;uri&quot;) != URI:
             raise FileNotFoundError(&quot;资源不存在&quot;)
-        return {&quot;contents&quot;: [{&quot;uri&quot;: URI, &quot;mimeType&quot;: &quot;text/plain&quot;, &quot;text&quot;: TEXT}]}
+        result = {&quot;contents&quot;: [{&quot;uri&quot;: URI, &quot;mimeType&quot;: &quot;text/plain&quot;, &quot;text&quot;: TEXT}]}
+        return result
     if req.method == &quot;prompts/list&quot;:
-        return {
+        result = {
             &quot;prompts&quot;: [
                 {
                     &quot;name&quot;: &quot;review_retrieval&quot;,
@@ -166,11 +172,12 @@ def dispatch(req: Request):
                 }
             ]
         }
+        return result
     if req.method == &quot;prompts/get&quot;:
         if req.params.get(&quot;name&quot;) != &quot;review_retrieval&quot;:
             raise ValueError(&quot;未知提示词&quot;)
         prompt_args = PromptArgs.model_validate(req.params.get(&quot;arguments&quot;, {}))
-        return {
+        result = {
             &quot;messages&quot;: [
                 {
                     &quot;role&quot;: &quot;user&quot;,
@@ -181,6 +188,7 @@ def dispatch(req: Request):
                 }
             ]
         }
+        return result
     raise NotImplementedError(&quot;未知方法&quot;)
 
 
@@ -189,7 +197,7 @@ def main():
     ready = False
     for line in sys.stdin:
         try:
-            raw: object = json.loads(line)
+            raw = json.loads(line)
             req = Request.model_validate(raw)
             if req.jsonrpc != &quot;2.0&quot;:
                 raise ValueError(&quot;jsonrpc 必须为 2.0&quot;)
@@ -304,7 +312,8 @@ class ResourceList(BaseModel):
 
 class PromptMeta(BaseModel):
     name: str
-    arguments: list[dict[str, object]] = Field(default_factory=list)
+    # 工厂本身也明确元素类型,避免 list[Unknown]。
+    arguments: list[dict[str, object]] = Field(default_factory=list[dict[str, object]])
 
 
 class PromptList(BaseModel):

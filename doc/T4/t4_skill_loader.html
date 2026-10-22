@@ -191,9 +191,9 @@ def split_skill(text: str):
         end = lines.index(&quot;---&quot;, 1)
     except ValueError as exc:
         raise ValueError(&quot;缺少 frontmatter 结束符&quot;) from exc
-    # safe_load 不构造任意 Python 对象;返回值依然是 Any,立即转为 object 再检查。
+    # safe_load 不构造任意 Python 对象;返回值依然是 Any,随后立即检查映射与键类型。
     try:
-        loaded: object = yaml.safe_load(&quot;\n&quot;.join(lines[1:end]))
+        loaded = yaml.safe_load(&quot;\n&quot;.join(lines[1:end]))
     except yaml.YAMLError as exc:
         raise ValueError(&quot;frontmatter 不是合法 YAML&quot;) from exc
     if not isinstance(loaded, dict) or not all(isinstance(k, str) for k in loaded):
@@ -288,7 +288,7 @@ def main():
 
 
 if __name__ == &quot;__main__&quot;:
-    main()</code></pre><div class="table-wrap"><table><tr><th>函数</th><th>合同与取舍</th></tr><tr><td>read_limited</td><td>读取上限+1字节检测溢出,不能先无限读取再截断。UTF-8 解码失败要报告。</td></tr><tr><td>split_skill</td><td>用 YAML 解析 frontmatter 后将 Any 收窄到 object,再检查映射、字段类型和名称。</td></tr><tr><td>scan_skills</td><td>仅扫描一个显式根目录的一级子目录,排序稳定；不同来源的优先级不在本例里暗中发明。</td></tr><tr><td>build_index</td><td>只序列化 name/description；绝对路径不必暴露给模型。</td></tr><tr><td>load_skill</td><td>按发现清单查名称,再次检查正文路径；读取时不执行任何命令。</td></tr><tr><td>read_reference</td><td>resolve 后同时检查 references 目录与目标路径,避免 ../ 或符号链接越界。</td></tr></table></div><p>本例仅实现基础 name/description 与正文读取,不是完整规范验证器：可选字段、重复 YAML 键、热更新等都没有完整支持。部署前校验可信内容,会话运行期间不允许非可信进程替换目录；resolve 检查不消除并发文件替换造成的 TOCTOU 风险。</p></section><section id="part-6"><h2><span class="no">06</span>动手三：接回项目的完整接线步骤</h2><p>① 将实验里的 SkillCard、read_limited、split_skill、scan_skills、build_index、load_skill、read_reference 连同所需导入复制到你创建的 app/services/skills.py；不要复制 main 与临时测试夹具。② 在 tools.py 增加以下包装函数与两项注册。json、TOOLS_SCHEMA、TOOL_REGISTRY 使用该文件已有定义。</p><pre><code># app/services/tools.py 的新增导入与包装函数；由你手动加入。
+    main()</code></pre><div class="table-wrap"><table><tr><th>函数</th><th>合同与取舍</th></tr><tr><td>read_limited</td><td>读取上限+1字节检测溢出,不能先无限读取再截断。UTF-8 解码失败要报告。</td></tr><tr><td>split_skill</td><td>用 YAML 解析 frontmatter 后立即检查映射与键类型，再用 cast 表达已检查的映射合同，继续验证字段类型和名称。</td></tr><tr><td>scan_skills</td><td>仅扫描一个显式根目录的一级子目录,排序稳定；不同来源的优先级不在本例里暗中发明。</td></tr><tr><td>build_index</td><td>只序列化 name/description；绝对路径不必暴露给模型。</td></tr><tr><td>load_skill</td><td>按发现清单查名称,再次检查正文路径；读取时不执行任何命令。</td></tr><tr><td>read_reference</td><td>resolve 后同时检查 references 目录与目标路径,避免 ../ 或符号链接越界。</td></tr></table></div><p>本例仅实现基础 name/description 与正文读取,不是完整规范验证器：可选字段、重复 YAML 键、热更新等都没有完整支持。部署前校验可信内容,会话运行期间不允许非可信进程替换目录；resolve 检查不消除并发文件替换造成的 TOCTOU 风险。</p></section><section id="part-6"><h2><span class="no">06</span>动手三：接回项目的完整接线步骤</h2><p>① 将实验里的 SkillCard、read_limited、split_skill、scan_skills、build_index、load_skill、read_reference 连同所需导入复制到你创建的 app/services/skills.py；不要复制 main 与临时测试夹具。② 在 tools.py 增加以下包装函数与两项注册。json、TOOLS_SCHEMA、TOOL_REGISTRY 使用该文件已有定义。</p><pre><code># app/services/tools.py 的新增导入与包装函数；由你手动加入。
 import asyncio
 from pathlib import Path
 

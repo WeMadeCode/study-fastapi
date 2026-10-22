@@ -80,7 +80,7 @@ app 布局 + uv,Python 3.13。请求链路:`main.py` 注册 routers → routers/
 
 - **参数必须标注**:推不出的类型(子进程返回值、外部回调、json.loads 结果)不标 = 隐式 Any 失明。泛型必须参数化——`dict` / `list` 裸写会被 disallow_any_generics 抓;异构字典字面量被推导退化时,显式 `dict[str, object]`。
 - **返回类型省略**:ruff select 含 ANN、ignore ANN2;mypy 仅对 `app.services.llm.*` 和 `scripts.*` 开 overrides(check_untyped_defs / disallow_any_generics / no_implicit_optional / warn_return_any / warn_unused_ignores),其余模块默认检查。
-- **Any 必须在边界收窄,禁止链式裸取**:json.loads / HTTP 响应 / 协议消息等 Any 入口——协议/存储层用 `isinstance 防御 + cast` 到 TypedDict 合同,数据层用 pydantic 模型建形状(EmbeddingResponse 模式);`resp["a"]["b"]["c"]` 式链式 Any 取值是违规写法。
+- **Any 必须在边界收窄,禁止链式裸取**:json.loads / HTTP 响应 / 协议消息等 Any 入口——协议/存储层用 `isinstance 防御 + cast` 到 TypedDict 合同,数据层用 pydantic 模型建形状(EmbeddingResponse 模式);`resp["a"]["b"]["c"]` 式链式 Any 取值是违规写法。外部返回值若随后立即交给 Pydantic 或 isinstance 校验，临时变量直接赋值，不额外标注 `: object`；校验前不得未经收窄就读取字段或调用具体类型的方法。能自动推导的类型不重复标注，异构容器等推导不足的位置仍保留必要的类型合同（2026-10-22 用户确认）。
 - **TypedDict = 形状合同**:StoredToolCall / MessageDict / JsonRpcRequest 同款;同一形状的可选键用 `NotRequired` 表达;`total=False` 的键取值用 `.get()`,不裸下标;合同变更要同步改全所有使用侧。
 - **cast 的诚实性**:cast 只收窄「写入侧合同能保证」的形状,不是骗过检查器的工具。
 

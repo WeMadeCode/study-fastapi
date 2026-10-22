@@ -137,7 +137,7 @@ def main():
     parser.add_argument(&quot;text&quot;, help=&quot;待统计文本；用 -- 结束选项解析&quot;)
     args = parser.parse_args()
     # argparse 默认返回 Any；在入口确认形状后再使用。
-    text: object = args.text
+    text = args.text
     if not isinstance(text, str):
         parser.error(&quot;text 必须是字符串&quot;)
     print(json.dumps({&quot;characters&quot;: len(text), &quot;pid&quot;: os.getpid()}, ensure_ascii=False))
