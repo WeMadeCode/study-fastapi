@@ -364,7 +364,7 @@ async def main():
 if __name__ == &quot;__main__&quot;:
     asyncio.run(main())</code></pre>
 <pre><code>uv run python -m scripts.t2_agent_demo</code></pre>
-<p>前置条件：项目依赖已安装，.env 中方舟模型相关配置可用；这一步会真实请求模型并产生 API 用量。它直接调用 Agent 服务，不启动 FastAPI，也不写入聊天记录；使用已有 build_llm_messages 构建上下文，因此练习脚本无需 import SDK 类型。此命令不会执行 lifespan 的 MCP 注册，足以验证本课新增的内置 CLI 工具。</p>
+<p>前置条件：项目依赖已安装，.env 中 DeepSeek 模型相关配置可用（当前代码仍沿用 ARK_API_KEY、ARK_BASE_URL、ARK_MODEL 等历史变量名，应填入实际使用的模型服务配置）；这一步会真实请求模型并产生 API 用量。它直接调用 Agent 服务，不启动 FastAPI，也不写入聊天记录；使用已有 build_llm_messages 构建上下文，因此练习脚本无需 import SDK 类型。此命令不会执行 lifespan 的 MCP 注册，足以验证本课新增的内置 CLI 工具。</p>
 <pre><code># 下面是轨迹形状示意，ID 和 PID 由真实运行产生
 assistant: tool_calls=[{
     &quot;id&quot;: &quot;call_abc&quot;, &quot;type&quot;: &quot;function&quot;,

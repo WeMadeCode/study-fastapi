@@ -86,6 +86,7 @@ app 布局 + uv,Python 3.13。请求链路:`main.py` 注册 routers → routers/
 
 ## 当前状态(2026-10-14)
 
+- **模型切换（2026-10-22，用户确认）**：当前已全面切换到 DeepSeek 相关模型，课件的模型前置条件按 DeepSeek 描述。代码仍沿用 `ark_*` / `ARK_*` 历史配置名，不能据此判断当前使用方舟模型；上文方舟 embedding 合同属于既有实现记录，不代表已验证切换后的 embedding 链路。
 - 2026-09-20 起主线转向 Agent 开发;**总目标已重新拍板(2026-10-13):深入掌握 Agent 开发,类 GPT 聊天后端只是练习载体**,完整路线见上方「学习路线图」;裸写优先,不引入 LangChain/LangGraph 等框架;练习脚本在 scripts/,**课件在 doc/(Agent 写,见「课件规范」)**。
 - **L1~L7 已结业**。接口:`POST /chat/stream`(SSE+持久化,三段式连接管理)、`POST /chat/agent`(非流式 agentic loop)、`POST /agent/stream`(流式 agentic loop)。L7 产物:scripts/l7_mcp_client.py(裸写 JSON-RPC 三连)、l7_mcp_server.py(自家 stdio MCP server)、app/services/mcp/client.py(McpClient,main.py lifespan 驱动,.env 的 MCP_KB_SERVER_CMD 配置);tools.py 经 register_mcp_tools 注入 + get_all_tool_schemas 聚合(MCP 同名覆盖内置),agent loop 取简历走 get_all_tool_schemas()。
 - **阶段 3 进行中**:A1 ✅ /stream assistant 落库(流收敛后 join 写入);A2 ✅ /agent/stream 流式化(llm 层 stream_chat_with_tools 拼接 tool_calls 碎片→TextEvent/ToolCallsEvent 事件合同;agent 层 run_agent_stream 透传 text/消化工具轮;轨迹仍收敛后单事务写;StoredToolCall ≡ SDK param ≡ 事件载荷三形合一);B1 ✅ trim_history 滑动窗口(切点后移到 user,防裁在轨迹中间致 400;message_to_dict 桥必须在 trim 前);B2 ✅ 会话互斥(claim/release,流式接口 claim 在 handler return 前、release 在 generator finally;同会话并发 409 已验证)+全局 _llm_semaphore(8)。
