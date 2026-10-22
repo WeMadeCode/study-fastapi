@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>T5 · Rules 与执行边界 — study-fastapi</title><style>
+<title>T5 · Rules 如何影响 Agent — study-fastapi</title><style>
   :root {
     --ink: #1f2430; --muted: #526070; --line: #dbe3eb; --bg: #ffffff;
     --soft: #f4f7fb; --code-bg: #18212d; --code-ink: #edf2f8;
@@ -88,195 +88,52 @@
   .table-wrap table {min-width:620px;}
   @media print {section {break-inside:auto;} h2,h3,.file-label {break-after:avoid;}}
 </style></head><body>
-<header class="hero"><div class="kicker">AGENT 开发 · 专题课 T5</div><h1>Rules 与执行边界</h1><p>从项目规则文件到真正的执行边界：自己组装规则上下文，亲手实现允许、拒绝和等待审批的最小流程。</p></header>
-<main><nav class="lesson-nav" aria-label="专题课导航"><a href="../T1/t1_agent_ecosystem.html">T1 · Agent 生态总览</a><a href="../T2/t2_cli_executor.html">T2 · CLI 与工具执行器</a><a href="../T3/t3_mcp_protocol.html">T3 · MCP 协议与能力接入</a><a href="../T4/t4_skill_loader.html">T4 · SKILL 与按需加载</a><a href="../T5/t5_rules_execution.html">T5 · Rules 与执行边界</a></nav><nav class="toc" aria-label="本课目录"><h2>本课目录</h2><ol><li><a href="#part-1">本课目标</a></li><li><a href="#part-2">背景回顾：本项目的规则与执行入口</a></li><li><a href="#part-3">原理：文本约束、执行策略、Hook</a></li><li><a href="#part-4">动手实现：规则加载 + 最小执行闸门</a></li><li><a href="#part-5">接回 Agent：文本在哪,闸门在哪</a></li><li><a href="#part-6">动手接线：先把 allow/deny 放进现有执行入口</a></li><li><a href="#part-7">代码审视：把例外写进明确合同</a></li><li><a href="#part-8">思考题与详解</a></li><li><a href="#part-9">验证实验</a></li><li><a href="#part-10">对比小结与进阶预告</a></li></ol></nav><section id="part-1"><h2><span class="no">01</span>本课目标</h2><p>看清规则从文件到模型的路径,并用一个最小闸门证明：未经批准时底层函数不会被执行。掌握审批与参数快照绑定、一次性使用、审计回调和默认拒绝。</p><div class="box ok"><b class="t">练习方式</b>本课代码是供你亲手输入的教学内容。Agent 维护 doc/ 课件；app/、scripts/ 和配置由你自己创建或修改。先运行独立实验，再按接入说明修改主项目。代码中的演示工具与目录均会明确标注，不把实验结果当作模型端到端验收。</div></section><section id="part-2"><h2><span class="no">02</span>背景回顾：本项目的规则与执行入口</h2><p>仓库 AGENTS.md 是共用规则正文,CLAUDE.md 只通过 @AGENTS.md 导入。这个机制服务于你使用的编程助手,不会自动传给你自己的 FastAPI Agent。你的 Agent 当前从 build_llm_messages 装载聊天历史,工具执行统一经过 execute_tool。</p><pre class="flow">编程助手的项目规则 → 约束帮你学习的助手
-你自己的 Agent → 必须自己实现规则加载、消息注入和执行检查</pre><p>本课选一个明确的教学合同：从项目根目录到指定目标文件父目录,依次读各层 AGENTS.md；不自动探索任意全盘路径,不模拟所有产品的优先级,也不解析 CLAUDE.md 的 @import。这样本项目的共享正文只读一次。规则目录要由可信 host 配置。</p></section><section id="part-3"><h2><span class="no">03</span>原理：文本约束、执行策略、Hook</h2><div class="table-wrap"><table><tr><th>机制</th><th>何时发生</th><th>可以保证什么</th></tr><tr><td>规则文本</td><td>模型请求前加入上下文</td><td>让模型看见约定；仍需观察是否遵循。</td></tr><tr><td>执行策略</td><td>调用底层工具之前</td><td>阻止未获许可的回调执行；必须覆盖所有执行路径。</td></tr><tr><td>审批</td><td>先暂停,用户作决定后恢复</td><td>绑定展示给用户的具体操作；不是模型自行填 approved=true。</td></tr><tr><td>Hook</td><td>工具前后或其他事件触发</td><td>按其实现做校验/审计；不是所有产品事件都能阻断。</td></tr><tr><td>沙箱</td><td>操作系统/运行时层面</td><td>限制文件/网络等实际能力；与提示词和工具名规则是不同层。</td></tr></table></div><p>自然语言规则的冲突不能简单靠“最后一个文件覆盖”来可靠解决。下面保留顺序与来源,让人能检查冲突,不会用字符串拼接假装理解所有规则。对执行策略可以给出明确算法：未知默认拒绝,只读样例允许,写入样例请求审批。</p><p>审批决定必须由可信 UI/接口传来,鉴别用户与会话。这里的 review 是 host 内部方法,不注册成模型工具。审批 id 对应已验证且冻结的参数快照,批准后不能换参数再执行。</p><p class="muted">核对依据：<a href="https://code.claude.com/docs/en/memory">Claude Code 规则与记忆</a> · <a href="https://docs.python.org/3.13/library/pathlib.html#pathlib.Path.resolve">Path.resolve</a></p></section><section id="part-4"><h2><span class="no">04</span>动手实现：规则加载 + 最小执行闸门</h2><p>创建 scripts/t5_rules_lab.py。read_note、save_note、erase_note 是实验里的工具名,没有加入你项目。fake_tool 只记录调用并返回 JSON,没有真实写磁盘。这让你能用“执行次数”验证权限,不依赖模型是否口头表示遵守。</p><p class="file-label">由你创建：scripts/t5_rules_lab.py</p><pre data-file="scripts/t5_rules_lab.py"><code>&quot;&quot;&quot;T5:规则加载与执行闸门,用户抄入 scripts/t5_rules_lab.py。&quot;&quot;&quot;
+<header class="hero"><div class="kicker">AGENT 开发 · 专题课 T5</div><h1>Rules 如何影响 Agent</h1><p>读一份规则文件，加入 system 消息，观察同一个 Agent 的回答如何改变。</p></header><main><nav class="lesson-nav" aria-label="专题课导航"><a href="../T1/t1_agent_ecosystem.html">T1 · Agent 生态总览</a><a href="../T2/t2_cli_executor.html">T2 · CLI 与工具执行器</a><a href="../T3/t3_mcp_protocol.html">T3 · MCP 协议与能力接入</a><a href="../T4/t4_skill_loader.html">T4 · SKILL 与按需加载</a><a href="../T5/t5_rules_execution.html">T5 · Rules 与执行边界</a></nav><nav class="toc" aria-label="本课目录"><h2>本课目录</h2><ol><li><a href="#part-1">本课目标</a></li><li><a href="#part-2">背景回顾</a></li><li><a href="#part-3">原理：文件到模型</a></li><li><a href="#part-4">动手实现</a></li><li><a href="#part-5">验证实验</a></li><li><a href="#part-6">思考题与详解</a></li><li><a href="#part-7">对比小结</a></li><li><a href="#part-8">进阶预告</a></li></ol></nav><section id="part-1"><h2><span class="no">01</span>本课目标</h2><p>只做一件事：让同一个 Agent 回答同一个问题，对比加载 Rules 前后的变化。你会看见规则文件如何变成 system 消息，以及模型如何按规则组织回答。</p><div class="box ok">本课只需要一个短规则文件和一个约 30 行的脚本。代码由你亲手写入；不需要改主项目的 Agent、路由或工具执行器。</div></section>
+<section id="part-2"><h2><span class="no">02</span>背景回顾：已有 Agent 可以直接复用</h2><p>项目里的 <code class="inline">build_llm_messages</code> 负责组装消息，目前已有 T4 的 Skill 索引 system 消息；<code class="inline">run_agent</code> 接收消息，调用模型，并在需要时执行工具。本实验直接使用这两个函数。</p><p>仓库根目录的 AGENTS.md 是编程助手的项目约定。你自己的 FastAPI Agent 当前不会自动读取它。本课单独创建 t5_rules.md，放三条容易观察的规则，避免把整份教学项目约定带入实验。</p></section>
+<section id="part-3"><h2><span class="no">03</span>原理：文件 → 消息 → 模型行为</h2><pre class="flow">t5_rules.md 中的文字
+    ↓ Python 读取文件
+插入 messages，role = system
+    ↓ run_agent(messages)
+模型看到规则与问题
+    ↓
+生成符合规则的回答</pre><p><strong>Rules 的作用来自文本进入了模型上下文。</strong>文件名没有魔法；在这个实验里，你把它改名后同步修改路径，效果仍然相同。只把文件放在目录里、没有读取和注入，模型就看不到。</p><p>这里由你编写并由宿主加载的规则使用 system 角色。它们与已有 Skill 提示一起发给模型；本实验选择互不冲突的内容，不讨论多层目录的优先级。</p></section>
+<section id="part-4"><h2><span class="no">04</span>动手实现：两个小文件</h2><h3>步骤 1 · 写三条规则</h3><p>由你创建 <code class="inline">scripts/t5_rules.md</code>：</p><pre><code>你是一位中文 Agent 开发老师。
+每次回答的第一行必须是：规则已加载
+接下来只用两个编号条目解释，每条一句话，不调用工具。</code></pre><p>固定首行是观察标记；两个条目是输出格式；不调用工具是行为要求。它们都由模型理解并尝试遵循。</p><h3>步骤 2 · 运行同一个 Agent 两次</h3><p>由你将 <code class="inline">scripts/t5_rules_lab.py</code> 调整为以下完整内容。原版的 Gate、审批、临时目录和审计逻辑在这个实验里都不需要。</p><pre data-file="scripts/t5_rules_lab.py"><code>&quot;&quot;&quot;T5：对比同一个 Agent 加载 Rules 前后的回答。&quot;&quot;&quot;
 
 import asyncio
-import json
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from app.services.agent import build_llm_messages, run_agent
 
-
-@dataclass(frozen=True)
-class RuleText:
-    source: str
-    content: str
+RULES_FILE = Path(__file__).with_name(&quot;t5_rules.md&quot;)
+QUESTION = &quot;什么是 Agent？&quot;
 
 
-def load_rules(root: Path, target_file: Path):
-    &quot;&quot;&quot;教学版约定:项目根到目标文件父目录,依次加载 AGENTS.md。&quot;&quot;&quot;
-    root = root.resolve(strict=True)
-    target = target_file.resolve(strict=True)
-    if not target.is_relative_to(root) or not target.is_file():
-        raise ValueError(&quot;目标文件不在项目内&quot;)
-    folders = [root]
-    current = root
-    for part in target.parent.relative_to(root).parts:
-        current /= part
-        folders.append(current)
-    rules: list[RuleText] = []
-    total = 0
-    for folder in folders:
-        path = folder / &quot;AGENTS.md&quot;
-        if not path.exists():
-            continue
-        resolved = path.resolve(strict=True)
-        if not resolved.is_relative_to(root):
-            raise ValueError(&quot;规则文件越出项目&quot;)
-        with resolved.open(&quot;rb&quot;) as stream:
-            raw = stream.read(16_385)
-        total += len(raw)
-        if len(raw) &gt; 16_384 or total &gt; 32_768:
-            raise ValueError(&quot;规则超出预算,请人工精简&quot;)
-        rules.append(RuleText(str(path.relative_to(root)), raw.decode(&quot;utf-8&quot;)))
-    return rules
+async def ask(use_rules: bool):
+    # 每次创建新上下文，保留项目已有的 Skill system 消息。
+    messages = build_llm_messages([])
+    rules = RULES_FILE.read_text(encoding=&quot;utf-8&quot;) if use_rules else &quot;&quot;
+    if rules:
+        messages.insert(0, {&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: rules})
 
-
-def rules_to_text(rules: list[RuleText]):
-    # 保留来源与顺序,便于人工排查冲突。程序不猜测自然语言的覆盖关系。
-    return &quot;\n\n&quot;.join(f&quot;【来源:{rule.source}】\n{rule.content}&quot; for rule in rules)
-
-
-class NoteArgs(BaseModel):
-    model_config = ConfigDict(strict=True, extra=&quot;forbid&quot;)
-    text: str
-
-
-@dataclass(frozen=True)
-class PendingCall:
-    name: str
-    arguments_json: str  # 审批绑定规范化后的参数快照。
-
-
-ToolFn = Callable[[str, dict[str, object]], Awaitable[str]]
-
-
-class Gate:
-    def __init__(self, dispatch: ToolFn):
-        self.dispatch = dispatch
-        self.pending: dict[str, PendingCall] = {}
-        self.audit: list[str] = []
-
-    async def request(self, name: str, arguments_json: str):
-        # 默认拒绝未知工具。模型不能通过参数新增权限。
-        if name not in {&quot;read_note&quot;, &quot;save_note&quot;}:
-            self.audit.append(f&quot;deny:{name}&quot;)
-            return {&quot;error&quot;: &quot;工具未获授权&quot;}
-        try:
-            args = NoteArgs.model_validate_json(arguments_json)
-        except ValidationError:
-            return {&quot;error&quot;: &quot;参数必须仅包含字符串 text&quot;}
-        if name == &quot;save_note&quot;:
-            call_id = uuid4().hex
-            self.pending[call_id] = PendingCall(name, args.model_dump_json())
-            self.audit.append(f&quot;ask:{name}&quot;)
-            return {&quot;approval_required&quot;: call_id, &quot;name&quot;: name, &quot;arguments&quot;: args.model_dump()}
-        return {&quot;result&quot;: await self._execute(name, args)}
-
-    async def review(self, call_id: str, allow: bool):
-        &quot;&quot;&quot;只由可信 host 的用户操作调用,绝不作为模型工具注册。&quot;&quot;&quot;
-        pending = self.pending.pop(call_id, None)
-        if pending is None:
-            return {&quot;error&quot;: &quot;审批不存在或已使用&quot;}
-        if not allow:
-            self.audit.append(f&quot;rejected:{pending.name}&quot;)
-            return {&quot;error&quot;: &quot;用户拒绝执行&quot;}
-        # 执行已展示并批准的快照,不接收模型重传的另一份参数。
-        args = NoteArgs.model_validate_json(pending.arguments_json)
-        return {&quot;result&quot;: await self._execute(pending.name, args)}
-
-    async def _execute(self, name: str, args: NoteArgs):
-        self.audit.append(f&quot;before:{name}&quot;)
-        try:
-            result = await self.dispatch(name, {&quot;text&quot;: args.text})
-        except Exception:
-            self.audit.append(f&quot;failed:{name}&quot;)
-            raise  # 取消/业务错误不能被 after 事件伪装成成功。
-        self.audit.append(f&quot;after:{name}&quot;)
-        return result
+    messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: QUESTION})
+    print(&quot;\n=== 加载 Rules ===&quot; if use_rules else &quot;\n=== 不加载 Rules ===&quot;)
+    print(&quot;本次额外规则：&quot;, rules or &quot;无&quot;)
+    answer, _ = await run_agent(messages)
+    print(answer)
 
 
 async def main():
-    with TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        (root / &quot;app&quot;).mkdir()
-        (root / &quot;AGENTS.md&quot;).write_text(&quot;全程中文。&quot;, encoding=&quot;utf-8&quot;)
-        (root / &quot;app/AGENTS.md&quot;).write_text(&quot;此目录的参数必须标注类型。&quot;, encoding=&quot;utf-8&quot;)
-        target = root / &quot;app/demo.py&quot;
-        target.write_text(&quot;&quot;, encoding=&quot;utf-8&quot;)
-        loaded = load_rules(root, target)
-        assert [r.source for r in loaded] == [&quot;AGENTS.md&quot;, &quot;app/AGENTS.md&quot;]
-        assert &quot;全程中文&quot; in rules_to_text(loaded)
-
-    executed: list[str] = []
-
-    async def fake_tool(name: str, args: dict[str, object]):
-        executed.append(name)
-        return json.dumps(args, ensure_ascii=False)
-
-    gate = Gate(fake_tool)
-    denied = await gate.request(&quot;erase_note&quot;, &#x27;{&quot;text&quot;:&quot;x&quot;}&#x27;)
-    assert &quot;error&quot; in denied and executed == []
-    bad = await gate.request(&quot;save_note&quot;, &#x27;{&quot;text&quot;:&quot;x&quot;,&quot;approved&quot;:true}&#x27;)
-    assert &quot;error&quot; in bad and executed == []
-    await gate.request(&quot;read_note&quot;, &#x27;{&quot;text&quot;:&quot;x&quot;}&#x27;)
-    requested = await gate.request(&quot;save_note&quot;, &#x27;{&quot;text&quot;:&quot;固定快照&quot;}&#x27;)
-    assert executed == [&quot;read_note&quot;]
-    call_id = requested[&quot;approval_required&quot;]
-    assert isinstance(call_id, str)
-    await gate.review(call_id, True)  # 测试里模拟可信用户点击;产品不可自动批准。
-    assert executed == [&quot;read_note&quot;, &quot;save_note&quot;]
-    assert &quot;error&quot; in await gate.review(call_id, True)
-    rejected = await gate.request(&quot;save_note&quot;, &#x27;{&quot;text&quot;:&quot;y&quot;}&#x27;)
-    reject_id = rejected[&quot;approval_required&quot;]
-    assert isinstance(reject_id, str)
-    await gate.review(reject_id, False)
-    assert executed == [&quot;read_note&quot;, &quot;save_note&quot;]
-    print(&quot;T5:层级规则、默认拒绝、禁止伪造批准、审批前不执行、一次性批准与拒绝均通过&quot;)
+    await ask(False)
+    await ask(True)
 
 
 if __name__ == &quot;__main__&quot;:
-    asyncio.run(main())</code></pre><div class="table-wrap"><table><tr><th>代码位置</th><th>解释</th></tr><tr><td>load_rules</td><td>根目录与目标文件都 resolve；只沿目标路径祖先加载,每个文件和总量都有预算。</td></tr><tr><td>rules_to_text</td><td>附来源后拼接；只生成文本,没有执行权限副作用。</td></tr><tr><td>NoteArgs</td><td>strict=True, extra=forbid；模型传 approved 字段会失败,不是悄悄忽略。</td></tr><tr><td>Gate.request</td><td>策略先判断工具名,再校验参数；save_note 只存 pending,不会运行 dispatch。</td></tr><tr><td>PendingCall</td><td>保存名字与规范化 JSON,避免批准展示 A 后执行 B。</td></tr><tr><td>Gate.review</td><td>pop 使审批只能用一次；拒绝不调用执行器。</td></tr><tr><td>_execute</td><td>before/after 是实际回调事件,只在 dispatch 成功后记 after。</td></tr></table></div><p>为什么不用一整套权限规则 DSL？因为这个阶段要看清调用时机与信任边界。等工具类型和产品交互确定,再引入更细的路径、租户或操作范围策略。当前 pending 是进程内内存,进程退出会丢失,还没有 TTL、身份验证与并发原子性,不能直接拿去做多 worker 生产审批。</p></section><section id="part-5"><h2><span class="no">05</span>接回 Agent：文本在哪,闸门在哪</h2><p>把 RuleText、load_rules、rules_to_text 和所需导入复制到你创建的 app/services/rules.py,再加入以下缓存入口。启动时加载一次,内容变化后重启。</p><pre><code>_active_rules = &quot;&quot;
-
-
-def initialize_rules(root: Path, target_file: Path):
-    global _active_rules
-    _active_rules = rules_to_text(load_rules(root, target_file))
-
-
-def get_rules_text():
-    return _active_rules</code></pre><p>main.py 新增导入,并在 lifespan 的 yield 前初始化。这里用固定 agent.py 演示目录继承范围；文件编辑型 Agent 应由可信 host 根据任务目标选择规则,不开放任意磁盘路径。</p><pre><code>from pathlib import Path
-from app.services.rules import initialize_rules
-
-# lifespan 的 yield 前执行
-project_root = Path(__file__).resolve().parents[1]
-initialize_rules(project_root, project_root / &quot;app/services/agent.py&quot;)</code></pre><p>agent.py 新增导入,替换 build_llm_messages 内原先的空列表初始化。SDK 消息类型继续留在 agent.py。</p><pre><code>from app.services.rules import get_rules_text
-
-# build_llm_messages 内
-llm_messages: list[ChatCompletionMessageParam] = [
-    {&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: get_rules_text()},
-]
-# 原来的 for m in history: 转换逻辑继续追加在这之后。
-# 若已接 T4,此处合并规则文本与 get_skill_index(),不要重复创建或覆盖消息列表。</code></pre><p>这个片段展示明确的插入点,不是让 router 直接 import SDK。正式修改函数参数时,同时检查 routers/chats.py 的所有 build_llm_messages 调用；若选择启动配置保存规则,可保持原函数签名,但要说明配置生命周期。</p><pre class="flow">模型 tool_call
-→ JSON 解析 + 参数形状验证
-→ host 策略检查
-   ├─ allow → execute_tool / 底层 dispatch → 结果
-   ├─ deny  → 错误结果,执行次数不增加
-   └─ ask   → 保持暂停,等可信用户操作 → 执行原快照或拒绝</pre><p>闸门要覆盖内置与 MCP 两条分支,而不是只包 TOOL_REGISTRY。否则同名工具经 _mcp_schemas 分发就绕过检查。非流式与流式 loop 都要走同一入口。</p><p>接入审批不能只把 {approval_required: ...} 当成普通 tool result 然后立即让模型继续循环：那样没有真正暂停任务。产品接入要保存待执行的 tool_call_id、参数和剩余执行位置,等待审批后再恢复,并且只写一个对应的最终 tool 结果。SSE 可发 approval_required 事件,但事件合同、会话互斥释放方式、审批期间的超时与重连都要在 L12 一起设计。</p><p>因此本课在独立实验里实现完整 request → review → dispatch 流程；主项目先接可直接完成的 allow/deny,审批的持久恢复放到 L12。进程内 pending 不是分布式任务系统。读取规则也不能长时间占着 AsyncSession,连接只在数据库读写时使用。</p></section><section id="part-6"><h2><span class="no">06</span>动手接线：先把 allow/deny 放进现有执行入口</h2><p>在 tools.py 把原 execute_tool 改名为 _execute_tool_unchecked,原函数体保留。然后加入下列同名入口。json 使用已有导入,两个 agent loop 的导入名也不变。工具新增后由开发者显式更新白名单,模型不能修改这个集合。</p><pre><code>ALLOWED_TOOL_NAMES = frozenset({
-    &quot;get_current_weather&quot;, &quot;get_city_time&quot;, &quot;search_knowledge_base&quot;,
-    &quot;text_stats&quot;, &quot;load_skill&quot;, &quot;read_skill_reference&quot;,
-})
-
-
-async def execute_tool(name: str, arguments_json: str):
-    if name not in ALLOWED_TOOL_NAMES:
-        return json.dumps({&quot;error&quot;: f&quot;工具未获授权:{name}&quot;}, ensure_ascii=False)
-    return await _execute_tool_unchecked(name, arguments_json)</code></pre><p>这一入口先拦工具名,再由旧执行器解析参数和分发,因此内置与 MCP 都经过检查。尚未注册的白名单工具仍由旧执行器返回“未知工具”。自家 L7 server 内调用 execute_tool 时也会经过它。若 MCP 能用同名工具覆盖但改变行为,还要在可信注册阶段绑定来源和权限,只认名称不足以覆盖这种风险。</p><p>先把 search_knowledge_base 临时移出白名单,直接调用与聊天调用均应被拒绝,且检索侧没有执行；恢复后再验证正常调用。这个实验无需让模型理解禁止规则就能证明闸门生效。</p></section><section id="part-7"><h2><span class="no">07</span>代码审视：把例外写进明确合同</h2><p>项目“Agent 不改源码,课件可改”的规则有清晰例外。若将其实现成文件工具策略,检查规范化后的目标是否在允许根目录内,而不是判断字符串里有没有 doc/。符号链接也必须检查,真正防止竞争条件需更严格的文件操作方式或沙箱。</p><p>read_note/save_note 这套按名字的策略只覆盖实验回调,并不自动限制任意 shell 或 server 内部的二次操作。一个可执行任意命令的 Bash 工具足以绕过粗粒度工具名许可,所以实际工具设计也应保持明确的业务输入范围。</p><p>Hook 的 after 事件可以做审计,但审计失败是否使业务返回失败需要提前定义。业务已经完成后,记录日志失败不代表操作没有发生；不能在错误处理里盲目重试写入。审批通过同样不保证执行必然成功,执行失败仍要报告真实结果。</p></section><section id="part-8"><h2><span class="no">08</span>思考题与详解</h2><details><summary>为什么把 deny 规则写成一句 system prompt 不够？</summary><p>system 文本影响模型生成,但没有在 Python 执行前检查就没有程序层阻断。用 fake_tool 的计数能直接检验这一点。</p></details><details><summary>为什么批准后不能让模型重新提交参数？</summary><p>用户批准的是已展示的具体操作。若允许替换参数,批准 A 可能执行 B。pending 保存不可变 JSON 快照,review 只消费该快照。</p></details><details><summary>能把 allow=True 直接作为 tool 参数吗？</summary><p>不能把它当作权限来源。模型能生成该字段,不代表用户已批准。可信 host 的审批入口必须与模型工具入口分开。</p></details><details><summary>为什么拒绝时不抛一个异常终止整个聊天？</summary><p>可以用稳定错误结果让模型知道操作未执行。但 host 必须明确拒绝和业务失败,不能伪造成功。协议/连接损坏等失败则需要上层决定终止或恢复。</p></details></section><section id="part-9"><h2><span class="no">09</span>验证实验</h2><pre><code>uv run python -m ruff check scripts/t5_rules_lab.py
-uv run python -m mypy --check-untyped-defs scripts/t5_rules_lab.py
-uv run python scripts/t5_rules_lab.py</code></pre><p>观察根规则与子目录规则的加载顺序；erase_note 被默认拒绝；传 approved 字段不改变权限；save_note 请求后 executed 不变；批准一次后只增加一次；重复批准和拒绝不会再执行。</p><p>扩展实验：在 fake_tool 中针对某个 text 抛 RuntimeError,核对失败被记录且没有 after 成功事件；让目标文件位于项目外,核对规则加载拒绝；给规则文件写超过预算的文本,核对没有静默裁掉后面的关键约束。</p><p>模型实验：给规则加入“回答使用中文”,观察真实模型是否遵循；再要求调用被拒绝的工具,看执行次数保持不变。前者测试模型行为,后者测试程序权限,两者不能用同一条“模型说已遵守”作为证据。</p></section><section id="part-10"><h2><span class="no">10</span>对比小结与进阶预告</h2><p>规则文本负责表达意图,执行策略负责控制回调,审批负责取得具体操作的授权,Hook 提供事件点。L12 会补齐长任务暂停/恢复与多 worker 审批,L15 再做恶意工具输出和引用文档中的注入攻防。</p></section></main><footer>study-fastapi · T5 · 2026-10-21 · 纯 HTML / 离线可读</footer></body></html>
+    asyncio.run(main())</code></pre><p><code class="inline">read_text</code> 读取规则；<code class="inline">messages.insert</code> 把规则加入上下文；<code class="inline">run_agent</code> 仍使用现有执行循环。SDK 类型由已有函数传递推导，脚本不用额外导入 OpenAI 类型，也不用写 cast。</p><p>两次都创建全新 messages，防止第一次回答影响第二次。这里的“不加载”指不加载本课的额外 Rules，项目原有的 Skill 提示仍保留。</p></section>
+<section id="part-5"><h2><span class="no">05</span>验证实验：先看变化，再改规则</h2><p>前置：项目依赖已安装，.env 已配置当前 DeepSeek 模型所需的地址、密钥与模型名。项目仍使用 ark_* / ARK_* 历史配置名。本实验直接调用 Agent，不启动 FastAPI lifespan，不加载 MCP 或 Skill 文件；问题本身不需要工具和数据库查询，但导入配置仍要求有效的 DATABASE_URL。</p><pre><code>uv run python -m ruff check scripts/t5_rules_lab.py
+uv run python -m mypy --follow-imports=silent --check-untyped-defs scripts/t5_rules_lab.py
+uv run python -m scripts.t5_rules_lab</code></pre><p>最后一条命令会调用真实模型，产生 API 用量。第一组回答的形式不固定；第二组预期以“规则已加载”开头，随后只有两个编号条目。解释内容不要求逐字一致。</p><ol><li><strong>观察注入：</strong>终端打印的“本次额外规则”应与文件内容一致。</li><li><strong>观察行为：</strong>检查回答首行和条目数，而不是只看模型是否声称遵守了规则。</li><li><strong>修改规则：</strong>把首行改为“我是极简老师”，条目数改成三个，再运行。回答应随规则变化。</li><li><strong>移除注入：</strong>临时注释 messages.insert 那一行再运行。即使程序读到了规则，它们也不会进入模型上下文。完成后恢复。</li></ol><p>找不到文件时，检查 t5_rules.md 是否与脚本同目录；认证或模型名错误时，先检查现有模型配置。若规则打印正确但输出不符合要求，这是模型遵循情况，需要记录实际回答，不能把提示词当成确定性校验。</p></section>
+<section id="part-6"><h2><span class="no">06</span>思考题与详解</h2><details><summary>Rules 和普通 prompt 是什么关系？</summary><p>在本实验中，Rules 是保存在文件里的长期约定，读取后成为 system prompt 的一部分。用户这次提出的问题则放在 user 消息里。加载方式与消息角色由宿主程序决定。</p></details><details><summary>为什么文件存在，但 Agent 没遵守？</summary><p>先确认文件有没有被读到，再确认文本有没有加入实际发送的 messages。即使两步都正确，模型仍可能不完全遵循规则；需要检查真实输出。</p></details><details><summary>写“不调用工具”，就能保证工具永远不执行吗？</summary><p>不能。这句规则影响模型选择，但当前 execute_tool 没因此多出权限检查。要保证某个工具不能运行，需要在执行前用程序拦截。这里先理解两者区别，不实现权限系统。</p></details></section>
+<section id="part-7"><h2><span class="no">07</span>对比小结</h2><table><tr><th>操作</th><th>发生了什么</th></tr><tr><td>只创建规则文件</td><td>磁盘上有文本，模型尚不可见。</td></tr><tr><td>读取文件但不注入</td><td>Python 拿到了文本，模型仍不可见。</td></tr><tr><td>作为 system 消息发送</td><td>模型获得规则，可以据此调整回答或工具选择。</td></tr><tr><td>工具前的程序检查</td><td>控制实际执行，是后续的执行边界话题。</td></tr></table></section>
+<section id="part-8"><h2><span class="no">08</span>进阶预告：正式接入放在哪里</h2><p>体验完成后，如果要让每次聊天都使用规则，可以在 <code class="inline">build_llm_messages</code> 组装 system 内容时加入规则文本，并保留已有的 Skill 索引。这样非流式和流式 Agent 都能收到规则，不需要复制两份加载逻辑。</p><p>本课到“规则文本改变 Agent 行为”为止。审批与任务暂停/恢复放到 L12；提示词注入和工具权限放到 L15。</p></section></main><footer>study-fastapi · T5 · 2026-10-22 · 纯 HTML / 离线可读</footer></body></html>

@@ -33,7 +33,7 @@
 
 - **阶段 1 对话核心(L1~L3)**:模型 API 调用、SSE 流式、会话持久化
 - **阶段 2 Agent 能力(L4~L7)**:function calling、agentic loop、RAG(pgvector)、MCP(裸写 stdio client/server → 正式化 McpClient)
-- **阶段 3 生产化(A1/A2/B1/B2 ✅,C1~C3 收尾进行中)**:/agent/stream 流式化(事件合同)、trim 滑动窗口、会话互斥 + 全局信号量、Redis 分布式互斥(C1)→ Docker 部署(C2)→ 结业盘点(C3)
+- **阶段 3 生产化（用户于 2026-10-22 确认完成）**:/agent/stream 流式化(事件合同)、trim 滑动窗口、会话互斥 + 全局信号量、Redis 分布式互斥(C1)→ Docker 部署(C2)→ 结业盘点(C3)
 
 ### 阶段 4 — 上下文工程与记忆(L8~L9):Agent 的记忆与注意力管理
 
@@ -86,13 +86,19 @@ app 布局 + uv,Python 3.13。请求链路:`main.py` 注册 routers → routers/
 
 ## 当前状态(2026-10-14)
 
+- **专题学习反馈（2026-10-22）**：用户在 T5 简化后表示“都学完了”，T1～T5 专题学习完成；随后用户确认 C3 收尾完成，进入 L8 课件梳理。
+
 - **模型切换（2026-10-22，用户确认）**：当前已全面切换到 DeepSeek 相关模型，课件的模型前置条件按 DeepSeek 描述。代码仍沿用 `ark_*` / `ARK_*` 历史配置名，不能据此判断当前使用方舟模型；上文方舟 embedding 合同属于既有实现记录，不代表已验证切换后的 embedding 链路。
 - 2026-09-20 起主线转向 Agent 开发;**总目标已重新拍板(2026-10-13):深入掌握 Agent 开发,类 GPT 聊天后端只是练习载体**,完整路线见上方「学习路线图」;裸写优先,不引入 LangChain/LangGraph 等框架;练习脚本在 scripts/,**课件在 doc/(Agent 写,见「课件规范」)**。
 - **L1~L7 已结业**。接口:`POST /chat/stream`(SSE+持久化,三段式连接管理)、`POST /chat/agent`(非流式 agentic loop)、`POST /agent/stream`(流式 agentic loop)。L7 产物:scripts/l7_mcp_client.py(裸写 JSON-RPC 三连)、l7_mcp_server.py(自家 stdio MCP server)、app/services/mcp/client.py(McpClient,main.py lifespan 驱动,.env 的 MCP_KB_SERVER_CMD 配置);tools.py 经 register_mcp_tools 注入 + get_all_tool_schemas 聚合(MCP 同名覆盖内置),agent loop 取简历走 get_all_tool_schemas()。
-- **阶段 3 进行中**:A1 ✅ /stream assistant 落库(流收敛后 join 写入);A2 ✅ /agent/stream 流式化(llm 层 stream_chat_with_tools 拼接 tool_calls 碎片→TextEvent/ToolCallsEvent 事件合同;agent 层 run_agent_stream 透传 text/消化工具轮;轨迹仍收敛后单事务写;StoredToolCall ≡ SDK param ≡ 事件载荷三形合一);B1 ✅ trim_history 滑动窗口(切点后移到 user,防裁在轨迹中间致 400;message_to_dict 桥必须在 trim 前);B2 ✅ 会话互斥(claim/release,流式接口 claim 在 handler return 前、release 在 generator finally;同会话并发 409 已验证)+全局 _llm_semaphore(8)。
-- **阶段 3 收尾课题进行中(课件:doc/C1/、doc/C2/、doc/C3/)**:C1 代码已完成——claim/release 换 Redis SET NX EX + DEL(_BUSY_KEY / _BUSY_TTL_SECONDS=600),_busy_conversations 已删,6 处调用点全 await,lifespan 补 redis aclose,.env.example 补 REDIS_URL;待做:C1 验证(ruff/mypy → --workers 4 同会话并发 5 遍全稳 409)→ C2 部署 → C3 盘点。
+- **阶段 3 基座完成记录**:A1 ✅ /stream assistant 落库(流收敛后 join 写入);A2 ✅ /agent/stream 流式化(llm 层 stream_chat_with_tools 拼接 tool_calls 碎片→TextEvent/ToolCallsEvent 事件合同;agent 层 run_agent_stream 透传 text/消化工具轮;轨迹仍收敛后单事务写;StoredToolCall ≡ SDK param ≡ 事件载荷三形合一);B1 ✅ trim_history 滑动窗口(切点后移到 user,防裁在轨迹中间致 400;message_to_dict 桥必须在 trim 前);B2 ✅ 会话互斥(claim/release,流式接口 claim 在 handler return 前、release 在 generator finally;同会话并发 409 已验证)+全局 _llm_semaphore(8)。
+- **阶段 3 收尾（用户于 2026-10-22 确认完成，课件:doc/C1/、doc/C2/、doc/C3/）**:C1 代码已完成——claim/release 换 Redis SET NX EX + DEL(_BUSY_KEY / _BUSY_TTL_SECONDS=600),_busy_conversations 已删,6 处调用点全 await,lifespan 补 redis aclose,.env.example 补 REDIS_URL;用户确认 C1 验证、C2 部署与 C3 收尾已完成；此状态来自用户反馈，本轮未重跑验收。旧 /chat/stream 仍在代码中，未据此推定用户已选择删除。
 - **专题课拆分(2026-10-21,已写课件,不代表用户已学或源码已实现)**：T1 保留生态总览与跨课导航；T2 CLI 与工具执行器（`doc/T2/t2_cli_executor.html`）；T3 MCP 协议与能力接入（`doc/T3/t3_mcp_protocol.html`）；T4 SKILL 与按需加载（`doc/T4/t4_skill_loader.html`）；T5 Rules 与执行边界（`doc/T5/t5_rules_execution.html`）。顺序 CLI → MCP → SKILL → Rules；L8～L16 主线编号不变,进入 L8 前仍需 C3 盘点。各课包含独立可运行实验、实际代码接线位置、类型边界、错误路径与验证；所有示例由用户亲手写入源码。
 - **T2 教学调整（2026-10-21）**：按“模型工具请求 → 宿主分发 → 适配器组装 argv → 执行器启动独立 CLI → 校验 stdout → tool 消息回传 → 模型回答”组织课件。示例分为独立 CLI、通用执行器、tools.py 适配注册与单独验证脚本；不再导入 t2_cli_lab。import 与进程调用必须明确区分，真实模型验收检查调用 ID、工具结果与子进程 PID；课件示例不代表源码已接入。
-- **专题核心结论**：CLI 要区分进程启动/退出/业务结果并处理双管道、输出预算和取消；MCP 三原语不自动进入模型,host 决定使用方式,共享 stdout 必须串行整个 RPC 或用唯一 reader 按 id 分发；Skill 的发现、选择、加载、执行是不同步骤,元数据与正文分层且内容不能扩大权限；Rules 文本注入与执行授权分开,审批绑定参数快照,不能由模型参数伪造批准。T3 实验固定协议 2025-06-18,不混用新版可选机制；T5 的内存审批仅用于教学,L12 再补持久化暂停/恢复与身份校验。
+- **专题核心结论**：CLI 要区分进程启动/退出/业务结果并处理双管道、输出预算和取消；MCP 三原语不自动进入模型,host 决定使用方式,共享 stdout 必须串行整个 RPC 或用唯一 reader 按 id 分发；Skill 的发现、选择、加载、执行是不同步骤,元数据与正文分层且内容不能扩大权限；Rules 文本注入与执行授权分开,审批绑定参数快照,不能由模型参数伪造批准。T3 实验固定协议 2025-06-18,不混用新版可选机制；T5 聚焦规则文件读取与 system 注入的行为对比；审批与暂停/恢复留到 L12，工具权限与注入攻防留到 L15。
 - **连接纪律(硬约定)**:run_agent/stream_chat 等秒级 await 外不得有任何 AsyncSessionLocal 块——连接只陪 DB 干活,不陪 LLM 思考;409 必须在响应头发出前抛,流开始后错误只能走流内事件;try/finally 必须包住 generator 的执行(放体内)而非定义。
 - 已知遗留:pytest/JWT 暂缓;news 模块 CRUD 搁置(news 内容已作 RAG 素材);/stream 与 /agent/stream 并存待 C3 决定去留。
+
+- **T5 教学简化（2026-10-22，用户确认）**：只体验 Rules 如何影响 Agent，复用 build_llm_messages / run_agent，对比同一问题加载规则前后的回答；使用独立短规则文件，保留已有 Skill 提示。课件移除 Gate、审批、审计与层级目录加载实现；脚本仍由用户亲手调整。
+
+- **L8 课件梳理（2026-10-22）**：重排为手动存储与跨会话注入 → remember/forget 工具 → 自动提取。保留现有 Skill system 消息，单用户全量注入；Pydantic 校验输入、数据库完全相同文本去重、按 id 删除。自动提取在轨迹提交后请求内 await，复用信号量且不占 DB 连接；本轮调用记忆工具时跳过提取。删除 memories 不会抹去历史，形状校验不保证语义正确。课件已更新不代表源码已实现；L9 接上下文预算与摘要。

@@ -17,7 +17,7 @@ from typing import Literal, TypedDict, cast
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.database.pgsql_client import AsyncSessionLocal
-from app.services.cli_executor import run_cli
+from app.services.cli import run_cli
 from app.services.llm.client import llm_client
 from app.services.mcp.client import McpToolMeta  # 顶部 import 区
 from app.services.rag import retriever
